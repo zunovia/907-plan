@@ -42,7 +42,7 @@ def test_sales_10():
 
 def test_purchase_8r():
     r = get_tax_category(0.08, "5471", "1113", "freee")
-    assert r == "課対仕入8%（軽減）", f"freee: {r}"
+    assert r == "課対仕入8%（軽）", f"freee: {r}"
     r = get_tax_category(0.08, "5471", "1113", "moneyforward")
     assert r == "課税仕入(軽8%)", f"mf: {r}"
     print("OK: 軽減税率8%仕入")

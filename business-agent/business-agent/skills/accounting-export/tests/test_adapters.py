@@ -81,7 +81,7 @@ def test_freee_no_tax():
     entry = _make_entry(tax_rate=None, tax_amount=0)
     row = adapter.convert_entry(entry)
     assert row[6] == "対象外", f"freee税区分: {row[6]}"
-    assert row[8] == "対象外", f"freee税計算区分: {row[8]}"
+    assert row[8] == "", f"freee税計算区分: '{row[8]}', 期待=''"
     print("OK: freee 非課税→対象外")
 
 

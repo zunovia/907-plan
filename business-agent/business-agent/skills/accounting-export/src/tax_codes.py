@@ -45,9 +45,9 @@ _TAX_MAPS: dict[str, dict[str, str]] = {
     "freee": {
         "none": "対象外",
         "sales_10": "課税売上10%",
-        "sales_8r": "課税売上8%（軽減）",
+        "sales_8r": "課税売上8%（軽）",
         "purchase_10": "課対仕入10%",
-        "purchase_8r": "課対仕入8%（軽減）",
+        "purchase_8r": "課対仕入8%（軽）",
     },
     "moneyforward": {
         "none": "対象外",

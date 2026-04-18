@@ -68,11 +68,11 @@ class FreeeAdapter(AbstractExportAdapter):
             entry.tax_rate, entry.debit_code, entry.credit_code
         )
 
-        # 税計算区分
+        # 税計算区分: 内税/外税のみ許可。非課税時は空文字
         if entry.tax_rate:
             tax_calc = "内税"
         else:
-            tax_calc = "対象外"
+            tax_calc = ""
 
         return [
             income_expense,                # 0: 収支区分
