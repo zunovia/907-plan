@@ -1,0 +1,17 @@
+# 機密データ（Git管理しない）
+data/*.xlsx
+data/*.XLSX
+data/*.csv
+data/*.CSV
+data/*.pdf
+data/*.PDF
+data/output/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
