@@ -41,16 +41,21 @@ def test_yayoi_columns():
 
 
 def test_freee_columns():
+    """freee: 取引インポート18列の構造検証."""
     adapter = FreeeAdapter()
     entry = _make_entry()
     row = adapter.convert_entry(entry)
     assert len(row) == 18, f"freee: 列数={len(row)}, 期待=18"
-    assert row[2] == "2026/04/01"  # 発生日
     assert row[0] == "支出"  # 5xxx→支出
+    assert row[2] == "2026/04/01"  # 発生日
+    assert row[5] == "消耗品費"  # 勘定科目
+    assert row[7] == "10000"  # 金額
+    assert row[10] == "テスト仕訳"  # 備考
     print("OK: freee 18列出力")
 
 
 def test_freee_income():
+    """freee: 売上→収入区分."""
     adapter = FreeeAdapter()
     entry = _make_entry(
         debit_code="1113",
@@ -64,7 +69,34 @@ def test_freee_income():
     )
     row = adapter.convert_entry(entry)
     assert row[0] == "収入"
+    assert row[5] == "自主事業収入"  # 貸方科目が勘定科目に
+    assert row[6] == "課税売上10%"  # 税区分
+    assert row[8] == "内税"  # 税計算区分
     print("OK: freee 収入区分")
+
+
+def test_freee_no_tax():
+    """freee: 非課税仕訳."""
+    adapter = FreeeAdapter()
+    entry = _make_entry(tax_rate=None, tax_amount=0)
+    row = adapter.convert_entry(entry)
+    assert row[6] == "対象外", f"freee税区分: {row[6]}"
+    assert row[8] == "対象外", f"freee税計算区分: {row[8]}"
+    print("OK: freee 非課税→対象外")
+
+
+def test_freee_transfer():
+    """freee: 振替仕訳（現金→預金）は収支区分が空."""
+    adapter = FreeeAdapter()
+    entry = _make_entry(
+        debit_code="1113",
+        debit_name="普通預金",
+        credit_code="1111",
+        credit_name="現金",
+    )
+    row = adapter.convert_entry(entry)
+    assert row[0] == "", f"freee収支区分: '{row[0]}', 期待=''"
+    print("OK: freee 振替仕訳の収支区分=空")
 
 
 def test_moneyforward_columns():
@@ -138,30 +170,6 @@ def test_moneyforward_tax_placement_sales():
     print("OK: MF 売上仕訳の税区分配置")
 
 
-def test_freee_no_tax():
-    """freee: 非課税仕訳の税計算区分が'対象外'."""
-    adapter = FreeeAdapter()
-    entry = _make_entry(tax_rate=None, tax_amount=0)
-    row = adapter.convert_entry(entry)
-    assert row[8] == "対象外", f"freee税計算区分: {row[8]}"
-    assert row[6] == "対象外", f"freee税区分: {row[6]}"
-    print("OK: freee 非課税→対象外")
-
-
-def test_freee_transfer():
-    """freee: 振替仕訳（現金→預金）は収支区分が空."""
-    adapter = FreeeAdapter()
-    entry = _make_entry(
-        debit_code="1113",
-        debit_name="普通預金",
-        credit_code="1111",
-        credit_name="現金",
-    )
-    row = adapter.convert_entry(entry)
-    assert row[0] == "", f"freee収支区分: '{row[0]}', 期待=''"
-    print("OK: freee 振替仕訳の収支区分=空")
-
-
 def test_yayoi_tax_placement_purchase():
     """弥生: 費用仕訳 → 借方に税区分+税額、貸方は対象外."""
     adapter = YayoiAdapter()
@@ -208,13 +216,13 @@ if __name__ == "__main__":
     test_yayoi_columns()
     test_freee_columns()
     test_freee_income()
+    test_freee_no_tax()
+    test_freee_transfer()
     test_moneyforward_columns()
     test_yayoi_validation()
     test_yayoi_adjustment_flag()
     test_moneyforward_tax_placement_purchase()
     test_moneyforward_tax_placement_sales()
-    test_freee_no_tax()
-    test_freee_transfer()
     test_yayoi_tax_placement_purchase()
     test_yayoi_tax_placement_sales()
     print("\n全テスト通過")

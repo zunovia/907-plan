@@ -145,10 +145,7 @@ def main():
         # --- freee ---
         print(f"\n--- freee会計 ---")
         out = export_from_tkc(SAMPLE, "freee", tmpdir / "out_freee.csv")
-        content = verify_encoding(out, "utf-8", expect_bom=True)
-        # BOM除去してから検証
-        if content.startswith("\ufeff"):
-            content = content[1:]
+        content = verify_encoding(out, "utf-8", expect_bom=False)
         verify_row_count(content, len(entries), has_header=True)
         verify_column_count(content, 18, has_header=True)
 
