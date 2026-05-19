@@ -153,6 +153,7 @@ input:focus,select:focus{border-color:#999}
   </div>
   <span class="tb-stat" id="tb-stat">0件 / ¥0</span>
   <button class="tb-dl" onclick="downloadAll()">⬇ CSV出力</button>
+  <button class="tb-dl" style="background:#217346;margin-left:2px" onclick="downloadAll('xlsx')">⬇ Excel出力</button>
   <button class="tb-dl" style="background:#e74c3c;margin-left:4px" onclick="resetAll()">↻ リフレッシュ</button>
 </div>
 
@@ -218,7 +219,8 @@ input:focus,select:focus{border-color:#999}
     <div><div class="stitle">月末定型仕訳</div><div class="ssub">毎月繰り返す固定費を自動生成</div></div>
     <div style="display:flex;gap:6px">
       <button class="btn btn-o btn-sm" onclick="addFixed()">＋ 追加</button>
-      <button class="btn btn-g btn-sm" onclick="dlSection('fixed')">⬇ このみ出力</button>
+      <button class="btn btn-g btn-sm" onclick="dlSection('fixed')">⬇ CSV</button>
+      <button class="btn btn-sm" style="background:#217346;color:#fff;border-color:#217346" onclick="dlSection('fixed','xlsx')">⬇ Excel</button>
     </div>
   </div>
   <div id="fixed-body"></div>
@@ -228,7 +230,10 @@ input:focus,select:focus{border-color:#999}
 <div class="sec" id="sec-bank">
   <div class="shd">
     <div><div class="stitle">銀行明細 → 仕訳</div><div class="ssub">銀行CSVをドロップ → 仕訳を自動判定</div></div>
-    <button class="btn btn-g btn-sm" onclick="dlSection('bank')">⬇ このみ出力</button>
+    <div style="display:flex;gap:4px">
+      <button class="btn btn-g btn-sm" onclick="dlSection('bank')">⬇ CSV</button>
+      <button class="btn btn-sm" style="background:#217346;color:#fff;border-color:#217346" onclick="dlSection('bank','xlsx')">⬇ Excel</button>
+    </div>
   </div>
   <div class="drop" id="drop" ondragover="event.preventDefault();this.classList.add('dg')" ondragleave="this.classList.remove('dg')" ondrop="onDrop(event)" onclick="document.getElementById('finput').click()">
     <input type="file" id="finput" multiple accept=".csv" onchange="onFiles(this.files)" style="display:none">
@@ -251,7 +256,10 @@ input:focus,select:focus{border-color:#999}
 <div class="sec" id="sec-cc">
   <div class="shd">
     <div><div class="stitle">カード明細 AI読取</div><div class="ssub">明細画像・PDFをドロップ → Claude AIが自動読取</div></div>
-    <button class="btn btn-g btn-sm" onclick="dlSection('cc')">⬇ このみ出力</button>
+    <div style="display:flex;gap:4px">
+      <button class="btn btn-g btn-sm" onclick="dlSection('cc')">⬇ CSV</button>
+      <button class="btn btn-sm" style="background:#217346;color:#fff;border-color:#217346" onclick="dlSection('cc','xlsx')">⬇ Excel</button>
+    </div>
   </div>
   <div style="background:var(--ambg);border:.5px solid #f6c97e;border-radius:var(--r);padding:9px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
     <span style="font-size:11px;font-weight:700">🔑 Claude APIキー</span>
@@ -287,8 +295,11 @@ input:focus,select:focus{border-color:#999}
 <!-- OUTPUT -->
 <div class="sec" id="sec-out">
   <div class="shd">
-    <div><div class="stitle">CSV出力確認</div><div class="ssub" id="out-lbl">出力形式: TKC 29カラム</div></div>
-    <button class="btn btn-g" onclick="downloadAll()">⬇ 全仕訳CSV出力</button>
+    <div><div class="stitle">出力確認</div><div class="ssub" id="out-lbl">出力形式: TKC 29カラム</div></div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-g" onclick="downloadAll()">⬇ CSV出力</button>
+      <button class="btn" style="background:#217346;color:#fff;border-color:#217346" onclick="downloadAll('xlsx')">⬇ Excel出力</button>
+    </div>
   </div>
   <div id="out-sums" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px"></div>
   <div class="card">
@@ -963,23 +974,50 @@ function buildMF(){
   });
   return rows;
 }
-function downloadAll(){
+function escXml(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function buildXlsx(rows,cols,sheetName){
+  var xml='<?xml version="1.0" encoding="UTF-8"?>\\n<?mso-application progid="Excel.Sheet"?>\\n';
+  xml+='<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\\n';
+  xml+='<Styles><Style ss:ID="hd"><Font ss:Bold="1" ss:Size="11"/><Interior ss:Color="#D9E1F2" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>';
+  xml+='<Style ss:ID="num"><NumberFormat ss:Format="#,##0"/></Style>';
+  xml+='<Style ss:ID="def"><Font ss:Size="11"/></Style></Styles>\\n';
+  xml+='<Worksheet ss:Name="'+escXml(sheetName||'仕訳')+'"><Table>\\n';
+  xml+='<Row>'+cols.map(function(c){return '<Cell ss:StyleID="hd"><Data ss:Type="String">'+escXml(c)+'</Data></Cell>';}).join('')+'</Row>\\n';
+  rows.forEach(function(r){
+    xml+='<Row>'+cols.map(function(c){
+      var v=r[c]==null?'':r[c];
+      if(typeof v==='number') return '<Cell ss:StyleID="num"><Data ss:Type="Number">'+v+'</Data></Cell>';
+      return '<Cell ss:StyleID="def"><Data ss:Type="String">'+escXml(v)+'</Data></Cell>';
+    }).join('')+'</Row>\\n';
+  });
+  xml+='</Table></Worksheet></Workbook>';
+  return xml;
+}
+function dlFile(blob,fname){
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=fname; a.style.display='none'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
+}
+function downloadAll(fmt){
   if(SW==='yayoi'||SW==='mf'){notif('⏳ '+({yayoi:'弥生会計',mf:'マネーフォワード'}[SW])+' は近日公開予定です','orange');return;}
   var ym=getYM(),ymS=String(ym.y)+String(ym.m).padStart(2,'0');
-  var rows,cols,fname,akey;
-  if(SW==='yayoi')      {rows=buildYayoi();cols=YY_C;fname='仕訳_弥生_'+ymS+'.csv';akey='借方金額';}
-  else if(SW==='freee') {rows=buildFreee();cols=FR_C;fname='仕訳_freee_'+ymS+'.csv';akey='借方金額';}
-  else if(SW==='mf')    {rows=buildMF();  cols=MF_C;fname='仕訳_MF_'+ymS+'.csv';  akey='借方金額';}
-  else                  {rows=buildTKC(); cols=TKC_C;fname='仕訳_TKC_'+ymS+'.csv'; akey='取引金額';}
+  var rows,cols,fbase,akey;
+  if(SW==='yayoi')      {rows=buildYayoi();cols=YY_C;fbase='仕訳_弥生_'+ymS;akey='借方金額';}
+  else if(SW==='freee') {rows=buildFreee();cols=FR_C;fbase='仕訳_freee_'+ymS;akey='借方金額';}
+  else if(SW==='mf')    {rows=buildMF();  cols=MF_C;fbase='仕訳_MF_'+ymS;  akey='借方金額';}
+  else                  {rows=buildTKC(); cols=TKC_C;fbase='仕訳_TKC_'+ymS; akey='取引金額';}
   if(!rows.length){notif('出力する仕訳がありません');return;}
-  var lines=[cols.join(',')].concat(rows.map(function(r){return cols.map(function(c){return ce(r[c]==null?'':r[c]);}).join(',');}));
-  var a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob(['\\uFEFF'+lines.join('\\n')],{type:'text/csv;charset=utf-8'}));
-  a.download=fname; a.style.display='none'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
+  if(fmt==='xlsx'){
+    var xml=buildXlsx(rows,cols,fbase);
+    dlFile(new Blob([xml],{type:'application/vnd.ms-excel;charset=utf-8'}),fbase+'.xls');
+  } else {
+    var lines=[cols.join(',')].concat(rows.map(function(r){return cols.map(function(c){return ce(r[c]==null?'':r[c]);}).join(',');}));
+    dlFile(new Blob(['\\uFEFF'+lines.join('\\n')],{type:'text/csv;charset=utf-8'}),fbase+'.csv');
+  }
   var t=rows.reduce(function(s,r){return s+(Number(r[akey])||0);},0);
   notif('✓ '+rows.length+'件 / ¥'+t.toLocaleString()+' を出力','green');
 }
-function dlSection(type){
+function dlSection(type,fmt){
   var rows=buildTKC().filter(function(r){
     var d=String(r['伝番']||'');
     if(type==='fixed') return d.indexOf('A')>=0&&d.indexOf('CC')<0;
@@ -990,10 +1028,14 @@ function dlSection(type){
   if(!rows.length){notif('データがありません');return;}
   var ym=getYM(),ymS=String(ym.y)+String(ym.m).padStart(2,'0');
   var lb={fixed:'定型仕訳',bank:'銀行仕訳',cc:'CC仕訳'};
-  var lines=[TKC_C.join(',')].concat(rows.map(function(r){return TKC_C.map(function(c){return ce(r[c]==null?'':r[c]);}).join(',');}));
-  var a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob(['\\uFEFF'+lines.join('\\n')],{type:'text/csv;charset=utf-8'}));
-  a.download=(lb[type]||type)+'_TKC_'+ymS+'.csv'; a.style.display='none'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
+  var fbase=(lb[type]||type)+'_TKC_'+ymS;
+  if(fmt==='xlsx'){
+    var xml=buildXlsx(rows,TKC_C,fbase);
+    dlFile(new Blob([xml],{type:'application/vnd.ms-excel;charset=utf-8'}),fbase+'.xls');
+  } else {
+    var lines=[TKC_C.join(',')].concat(rows.map(function(r){return TKC_C.map(function(c){return ce(r[c]==null?'':r[c]);}).join(',');}));
+    dlFile(new Blob(['\\uFEFF'+lines.join('\\n')],{type:'text/csv;charset=utf-8'}),fbase+'.csv');
+  }
   notif('✓ '+rows.length+'件を出力','green');
 }
 
