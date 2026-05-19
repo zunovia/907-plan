@@ -1,0 +1,8 @@
+name = "keiri-kaizen-mainpage"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# カスタムドメイン
+[[routes]]
+pattern = "tkc.surc.online"
+custom_domain = true

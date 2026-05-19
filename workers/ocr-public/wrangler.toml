@@ -1,0 +1,8 @@
+name = "ocr-public"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+workers_dev = true
+
+[[routes]]
+pattern = "ocr.surc.online"
+custom_domain = true

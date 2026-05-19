@@ -1,0 +1,16 @@
+name = "keiri-yayoi-freee"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[[kv_namespaces]]
+binding = "SERIAL_KV"
+id = "5948223178204a75a2ff5eacbe5a41fc"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "8741ea90d2b64b129f67dba692fe0e79"
+
+[vars]
+SPREADSHEET_WEBHOOK_URL = ""
+
+# ADMIN_API_KEY is managed via `wrangler secret put ADMIN_API_KEY`

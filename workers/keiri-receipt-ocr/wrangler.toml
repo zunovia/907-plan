@@ -1,0 +1,11 @@
+name = "keiri-receipt-ocr"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+workers_dev = true
+
+# カスタムドメイン
+[[routes]]
+pattern = "chu-ri.surc.online"
+custom_domain = true
+
+# ANTHROPIC_API_KEY は wrangler secret put ANTHROPIC_API_KEY で設定

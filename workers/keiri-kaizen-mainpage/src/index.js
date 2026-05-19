@@ -1590,7 +1590,7 @@ footer{
     TKC・freee会計に対応したインポートCSVをワンクリックで生成します。弥生会計・マネーフォワード対応版も開発中。
   </p>
   <div class="hero-btns">
-    <a class="btn-primary" href="tool.html" target="_blank">&#9654;&#xFE0E; 今すぐ無料で試す</a>
+    <a class="btn-primary" href="https://keiri-yayoi-freee.kaneda-ryota.workers.dev/tool.html" target="_blank">&#9654;&#xFE0E; 今すぐ無料で試す</a>
     <a class="btn-secondary" href="#features">機能を見る</a>
     <a class="btn-secondary" href="https://surc.online/" target="_blank" rel="noopener" style="border-color:rgba(0,120,200,.2)">導入を相談する</a>
   </div>
@@ -1957,7 +1957,7 @@ footer{
     弥生会計・マネーフォワード対応版は順次リリース予定です。
   </p>
   <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:20px">
-    <a href="tool.html" target="_blank" style="background:#fff;color:var(--cyan);padding:14px 36px;border-radius:8px;font-size:15px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:8px;transition:all .2s" onmouseover="this.style.background='#f0f8ff'" onmouseout="this.style.background='#fff'">
+    <a href="https://keiri-yayoi-freee.kaneda-ryota.workers.dev/tool.html" target="_blank" style="background:#fff;color:var(--cyan);padding:14px 36px;border-radius:8px;font-size:15px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:8px;transition:all .2s" onmouseover="this.style.background='#f0f8ff'" onmouseout="this.style.background='#fff'">
       ▶ 今すぐ試す（無料）
     </a>
   </div>
