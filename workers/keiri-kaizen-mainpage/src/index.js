@@ -2092,7 +2092,7 @@ footer{
       <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:26px;border-top:3px solid #b45309">
         <div style="font-size:11px;font-weight:700;color:#b45309;letter-spacing:.06em;margin-bottom:8px">落とし穴 01</div>
         <h4 style="font-size:14px;font-weight:700;color:#1a1a1a;margin-bottom:10px">課税区分52はCLSが無いと全件落ちる</h4>
-        <p style="font-size:12.5px;color:#777;line-height:1.85">免税事業者等からの課税仕入れ（経過措置）の課税区分 <strong>52・53・62・63・72・73</strong> が<strong>1件でも</strong>含まれると、部門明細ファイル（.cls）に部門税込金額をセットしない限り<strong>ファイル全体の読込が中止</strong>されます。部門金額入力区分の切替とCLS生成を自動化し、該当月でも取込が止まりません。<br><span style="color:#b45309">控除割合は令和8年9月30日までの課税仕入れが80%、令和8年10月1日以後は70%（適用期限2年延長）。区分の運用が変わる端境期こそ、機械的な検証が効きます。</span></p>
+        <p style="font-size:12.5px;color:#777;line-height:1.85">免税事業者等からの課税仕入れ（経過措置）の課税区分 <strong>52・53・62・63・72・73</strong> が<strong>1件でも</strong>含まれると、部門明細ファイル（.cls）に部門税込金額をセットしない限り<strong>ファイル全体の読込が中止</strong>されます。部門金額入力区分の切替とCLS生成を自動化し、該当月でも取込が止まりません。<br><span style="color:#b45309">控除割合は令和8年9月30日までの課税仕入れが80%、令和8年10月1日以後は70%（適用期限2年延長）。またぐ取引は<strong>支払日や請求書の日付ではなく「課税仕入れを行った日」</strong>で判定するため、月末締め翌月払いの請求書ほど取り違えが起きます。控除割合はコードに直書きせず「取引日→控除割合→課税区分」の対応表で持ち、端境期は全件を機械的に検証しています。</span></p>
       </div>
       <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:26px;border-top:3px solid #0078c8">
         <div style="font-size:11px;font-weight:700;color:#0078c8;letter-spacing:.06em;margin-bottom:8px">落とし穴 02</div>
@@ -2133,6 +2133,32 @@ footer{
         <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:6px">取込後に突合</div>
         <div style="font-size:12px;color:#777;line-height:1.75">取込後のTKC仕訳帳と生成SLPを照合し、修正・未反映・手入力追加・二重計上を洗い出す。</div>
       </div>
+    </div>
+
+    <h3 style="font-family:'Noto Serif JP',serif;font-size:19px;font-weight:700;color:#1a1a1a;margin:56px 0 8px">複数拠点・複数事業の月次で、いちばん時間が溶けるところ</h3>
+    <p style="font-size:13px;color:#777;line-height:1.9;margin-bottom:24px">拠点や事業が複数あると、仕訳の本数よりも「この1件はどの事業のどの科目か」を決める時間のほうが長くなります。実際の月次でぶつかったのは、次の4つでした。</p>
+    <div class="slp-g4" style="margin-top:0">
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:24px"><div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:10px">同じ費目でも、部門で科目コードが変わる</div><p style="font-size:12.5px;color:#777;line-height:1.85;margin:0">NPO法人会計は事業費と管理費で勘定科目が二本立てです。同じ「消耗品費」でも、拠点の活動で使えば事業費、本部の事務用なら管理費で、<strong>科目コードそのものが別</strong>になります。摘要だけでは決まらず、部門（事業）が決まってはじめて科目が決まる——この順番を取引先マスタと過去仕訳から自動で解いています。</p></div>
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:24px"><div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:10px">拠点ごとの現金を、補助コードで分けて追う</div><p style="font-size:12.5px;color:#777;line-height:1.85;margin:0">現金勘定を拠点別の補助コードで管理している法人では、拠点ごとの現金出納帳がそのまま補助別の残高チェーンになります。前月末残高から当月の入出金を積み上げ、出納帳の期末残高と一致しなければ提出前に止まる仕組みにしています。</p></div>
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:24px"><div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:10px">日々の売上は、月末に1本へまとめる</div><p style="font-size:12.5px;color:#777;line-height:1.85;margin:0">拠点の日次売上を1日1本ずつ仕訳にすると、月次の仕訳が数百件に膨らみ、元帳が読めなくなります。日次の明細は出納帳側に残したまま、TKCへ渡す仕訳は<strong>月末日付の1本に集約</strong>。内訳が必要なときは同時出力の確認用Excelを見れば追えます。</p></div>
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:24px"><div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:10px">取引先名の表記ゆれを、読みで寄せる</div><p style="font-size:12.5px;color:#777;line-height:1.85;margin:0">銀行CSVの振込依頼人は半角カナ、請求書は漢字、前月の仕訳は略称——と、同じ取引先が毎月違う文字列で現れます。半角カナの正規化と読み仮名での照合で取引先マスタに寄せ、確信が持てないものは推測で埋めずに★要確認として残します。</p></div>
+    </div>
+
+    <h3 style="font-family:'Noto Serif JP',serif;font-size:19px;font-weight:700;color:#1a1a1a;margin:56px 0 8px">毎月、実際にお渡ししているもの</h3>
+    <p style="font-size:13px;color:#777;line-height:1.9;margin-bottom:20px">「仕訳データを作りました」だけでは、受け取った側が確認できません。確認と検証のための成果物まで含めて月次の納品物としています。</p>
+    <ul style="list-style:none;padding:0;margin:0;background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:24px 26px 14px">
+      <li style="display:flex;gap:10px;align-items:flex-start;margin-bottom:12px"><span style="color:var(--cyan);flex-shrink:0;font-size:13px;line-height:1.85">▪</span><span style="font-size:12.5px;color:#777;line-height:1.85"><strong style="color:#1a1a1a">SLP／CLS の zip（口座別）</strong>——そのままTKCの「他社システム自動仕訳の読込」に投入できる状態で。</span></li>
+      <li style="display:flex;gap:10px;align-items:flex-start;margin-bottom:12px"><span style="color:var(--cyan);flex-shrink:0;font-size:13px;line-height:1.85">▪</span><span style="font-size:12.5px;color:#777;line-height:1.85"><strong style="color:#1a1a1a">日本語ヘッダの確認用Excel</strong>——47列のタブ区切りは人が読めないため、日付・借方科目・貸方科目・金額・部門・課税区分を日本語見出しの表で同時に出します。ここが目視確認の実体です。</span></li>
+      <li style="display:flex;gap:10px;align-items:flex-start;margin-bottom:12px"><span style="color:var(--cyan);flex-shrink:0;font-size:13px;line-height:1.85">▪</span><span style="font-size:12.5px;color:#777;line-height:1.85"><strong style="color:#1a1a1a">★要確認の一覧</strong>——自動で決められなかった行だけを抜き出したもの。ここがゼロにならない限り提出できません。</span></li>
+      <li style="display:flex;gap:10px;align-items:flex-start;margin-bottom:12px"><span style="color:var(--cyan);flex-shrink:0;font-size:13px;line-height:1.85">▪</span><span style="font-size:12.5px;color:#777;line-height:1.85"><strong style="color:#1a1a1a">取込後の突合レポート</strong>——TKCに取り込んだあとの仕訳帳と、こちらが生成したSLPを照合し、修正・未反映・手入力での追加・二重計上を洗い出した一覧。翌月の辞書の材料にもなります。</span></li>
+    </ul>
+
+    <h3 style="font-family:'Noto Serif JP',serif;font-size:19px;font-weight:700;color:#1a1a1a;margin:56px 0 8px">あえて自動化しない、と決めていること</h3>
+    <p style="font-size:13px;color:#777;line-height:1.9;margin-bottom:24px">何を自動化するかと同じくらい、何を自動化しないかを先に決めています。ここを曖昧にしたまま範囲を広げると、月次が止まったときに誰も原因を追えなくなります。</p>
+    <div class="slp-g3">
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:26px;border-top:3px solid #7a5f14"><h4 style="font-size:14px;font-weight:700;color:#1a1a1a;margin-bottom:10px">税務の判断</h4><p style="font-size:12.5px;color:#777;line-height:1.85;margin:0">勘定科目の当てはめや控除割合の適用は、あくまで過去の仕訳と取引先マスタからの<strong>下書き</strong>です。最終的な税務判断は顧問税理士・会計事務所の領域であり、当社が代わりに決めることはしません。迷う行を消すのではなく、★要確認として判断が必要な人の前に残すのが役割です。</p></div>
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:26px;border-top:3px solid #0a7c5a"><h4 style="font-size:14px;font-weight:700;color:#1a1a1a;margin-bottom:10px">電子帳簿保存法のスキャナ保存</h4><p style="font-size:12.5px;color:#777;line-height:1.85;margin:0">電帳法のうちスキャナ保存は<strong>任意制度</strong>です。紙の証憑を従来どおり保管しているなら、解像度・タイムスタンプ・訂正削除履歴・検索要件といった要件の対象外で、読み取り画像は業務データのまま扱えます。ペーパーレス化まで踏み込むなら、自前で要件を満たすのではなくTKCの証憑保存機能に寄せるほうが確実です。※ メールでPDFを受け取るなどの電子取引データの保存は義務であり、これとは別の話です。</p></div>
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:26px;border-top:3px solid #0078c8"><h4 style="font-size:14px;font-weight:700;color:#1a1a1a;margin-bottom:10px">TKC純正で足りる機能</h4><p style="font-size:12.5px;color:#777;line-height:1.85;margin:0">TKCには証憑を読み取って仕訳の基礎データにする機能や、スマートフォンで証憑を撮影してアップロードするアプリが用意されています。同じものを作り直しても保守先が増えるだけなので、当社が引き受けるのは<strong>純正機能では届かないところ</strong>——複数拠点・複数事業の部門振替、既存の月次パイプラインへの接続、提出前の全件検証——に絞っています。</p></div>
     </div>
 
     <div style="margin-top:28px;background:#fff;border:1px solid rgba(0,120,200,.18);border-radius:10px;padding:20px 24px;display:flex;align-items:flex-start;gap:14px">
