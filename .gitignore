@@ -1,0 +1,58 @@
+# ─────────────────────────────────────────────
+# このリポジトリは【公開】です。
+# 顧問先の会計データ・原本PDF・APIキーは絶対にコミットしないこと。
+# `git add -A` / `git add .` の事故を防ぐため、データ置き場をここで除外しています。
+# 新しいデータフォルダを作ったら、必ずこのファイルに追記してください。
+# ─────────────────────────────────────────────
+
+# ── 会計データ・顧客資料（機密） ──
+TKC_切出_Data/
+**/TKC_切出_Data/
+data/
+freeeエクセルインポートサンプル/
+*.slp
+*.cls
+
+# 実データが入りやすい拡張子（サンプルを置きたいときは -f で明示的に追加する）
+*.xlsx
+*.xls
+*.csv
+*.pdf
+!**/tests/**/sample_*.csv
+
+# ── 現場で作った単発のHTML（顧客の法人名・拠点名が埋め込まれていることがある） ──
+# 例: business-agent/receipt-ocr.html に法人名・拠点名が入っていた（2026-09-06）
+# 意図して追加したいときだけ `git add -f <file>` を使うこと。
+business-agent/*.html
+
+# ── 資格情報 ──
+.env
+.env.*
+!.env.example
+*.key
+!*.key.pub
+.secrets/
+secrets/
+
+# ── ビルド成果物・キャッシュ ──
+node_modules/
+dist/
+build/
+target/
+.wrangler/
+**/.wrangler/
+__pycache__/
+*.pyc
+
+# ── 作業中の一時ファイル ──
+tmp_*
+*.tmp
+debug_*.js
+test_*.js
+ocr-deployed*.html
+ocr-served.html
+ocr-test.html
+
+# ── OS ──
+Thumbs.db
+.DS_Store
