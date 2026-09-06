@@ -1,0 +1,80 @@
+name: Release desktop app
+
+# タグ desktop-v0.1.0 のように push すると、macOS(Apple Silicon+Intel) と Windows の
+# インストーラをまとめてビルドし、GitHub Release に添付する。
+# latest.json も同時に生成され、アプリ内の自動更新はそれを見にいく。
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+
+env:
+  PROJECT_PATH: desktop/tkc-keiri-desktop
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: "--target universal-apple-darwin"
+          - platform: windows-latest
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node をセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Rust をセットアップ
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust のキャッシュ
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "${{ env.PROJECT_PATH }}/src-tauri -> target"
+
+      - name: 依存をインストール
+        working-directory: ${{ env.PROJECT_PATH }}
+        run: npm ci
+
+      # 画面は Worker のソース（workers/keiri-kaizen-mainpage/src/index.js）から生成する
+      - name: 画面を生成
+        working-directory: ${{ env.PROJECT_PATH }}
+        run: npm run build:web
+
+      - name: ビルドしてリリースに添付
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 自動更新の署名（コード署名とは別物。これが無いと更新が配れない）
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # ── macOS のコード署名・公証を入れるときは Secrets を登録して以下を有効化する ──
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: ${{ env.PROJECT_PATH }}
+          tagName: ${{ github.ref_name }}
+          releaseName: "TKC AI 仕訳ツール ${{ github.ref_name }}"
+          releaseBody: |
+            ### 変更点
+            （ここに変更内容を書く。アプリの更新ダイアログにそのまま表示されます）
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          args: ${{ matrix.args }}

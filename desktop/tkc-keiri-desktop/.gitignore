@@ -1,0 +1,8 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/schemas/
+app-icon.png
+
+# 更新用の秘密鍵は絶対にコミットしない（GitHub Secrets に入れる）
+keys/updater.key

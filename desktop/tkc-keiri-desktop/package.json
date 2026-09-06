@@ -1,0 +1,16 @@
+{
+  "name": "tkc-keiri-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "TKC AI 仕訳インポートツール デスクトップ版",
+  "scripts": {
+    "build:web": "node scripts/build-web.mjs",
+    "dev": "npm run build:web && tauri dev",
+    "build": "npm run build:web && tauri build",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

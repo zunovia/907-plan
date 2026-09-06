@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "TKC Keiri Tool",
+  "version": "0.1.0",
+  "identifier": "online.surc.tkc-keiri",
+  "build": {
+    "frontendDist": "../dist",
+    "beforeDevCommand": "npm run build:web",
+    "beforeBuildCommand": "npm run build:web"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "TKC AI 仕訳インポートツール",
+        "width": 1360,
+        "height": 900,
+        "minWidth": 960,
+        "minHeight": 640,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis", "dmg", "app"],
+    "createUpdaterArtifacts": true,
+    "publisher": "Sur Communication",
+    "copyright": "© 2026 Sur Communication",
+    "category": "Business",
+    "shortDescription": "TKC AI 仕訳インポートツール",
+    "longDescription": "銀行明細・カード明細・月末定型仕訳から仕訳の下書きを作り、TKC等へのインポートファイルを生成します。確定は人が行います。",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/zunovia/keiri-dx-workers/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQyOEFCQTZCOTlGRDUyMTIKUldRU1V2MlphN3FLUXNQdWdBbmtJNU5oaXI5dnJzdjU5anBFOHAyV09Nd09LbjBPUGZ3TjlUYXEK"
+    }
+  }
+}

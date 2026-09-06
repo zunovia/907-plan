@@ -6,3 +6,16 @@ compatibility_date = "2024-09-23"
 [[routes]]
 pattern = "tkc.surc.online"
 custom_domain = true
+
+# ── 無料お試し（/api/demo-shiwake）─────────────────────────
+# 1) APIキー（必須）: これが未設定だと お試し欄は「準備中」表示になる
+#      npx wrangler secret put ANTHROPIC_API_KEY
+# 2) 回数制限（任意）: KVを紐付けるとIP単位・1日3回をエッジ横断で厳密に制限できる。
+#    未設定でもisolate内メモリでベストエフォート制限＋ブラウザ側で3回制限が働く。
+#      npx wrangler kv namespace create TRIAL_KV
+#    [[kv_namespaces]]
+#    binding = "TRIAL_KV"
+#    id = "<作成後に表示されるid>"
+# 3) お試しで使うモデル（任意・既定 claude-haiku-4-5）
+#    [vars]
+#    DEMO_MODEL = "claude-sonnet-5"

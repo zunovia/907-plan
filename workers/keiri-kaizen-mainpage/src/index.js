@@ -1,6 +1,131 @@
+// 無料お試しのベストエフォート・レート制限（isolate内メモリ。KVがあればKVを優先）
+const TRIAL_MEM = new Map();
+const TRIAL_LIMIT = 3;
+
+function jsonRes(obj, status) {
+  return new Response(JSON.stringify(obj), {
+    status: status || 200,
+    headers: { "Content-Type": "application/json;charset=UTF-8", "Cache-Control": "no-store" },
+  });
+}
+
+const DEMO_SYSTEM = [
+  "あなたは日本の会計実務に精通した仕訳作成アシスタントです。日本の中小企業・NPO法人の経理を想定します。",
+  "入力された銀行明細・レシート・カード明細のテキストから、複式簿記の仕訳の下書きを作成してください。",
+  "確定させるのは人間です。あなたの出力は人が確認するための下書きであり、断定しすぎないこと。",
+  "",
+  "【日本の銀行明細の表記ルール（重要）】",
+  "全銀システムの明細は半角カタカナで、法人格が括弧付きで略記されます。取引先名として正しく解釈すること。",
+  "・カ）／（カ／カ) ＝ 株式会社（例:「カ）ダイイチシヨウジ」＝ 株式会社ダイイチ商事）",
+  "・ユ） ＝ 有限会社、ザイ） ＝ 財団法人、シヤ） ＝ 社団法人、ト） ＝ 特定非営利活動法人、ガク） ＝ 学校法人、イ） ＝ 医療法人",
+  "・末尾の（カ ＝ 株式会社（例:「ダイイチシヨウジ（カ」）。シテン/シ ＝ 支店。",
+  "・「カード」「カ-ド」＝ATMカード、「シハライキ」＝支払機、「フリコミ」＝振込、「フリカエ」＝振替、「ヒキオトシ」＝引落。",
+  "・カタカナ列を外貨・商品名と読み違えないこと（「カ）ダイイチ…」はカナダドルではない）。",
+  "・摘要には半角カナのままではなく、読み下した社名を書くこと。例:「カ）ダイイチシヨウジ」→「（株）ダイイチ商事」、",
+  "  「ユ）ヤマダデンキ」→「（有）ヤマダ電機」。長音・小書き文字が落ちている前提で自然な日本語に戻す。",
+  "  読み下しに自信が持てないときは元の表記も残し、needsCheck を true にすること。",
+  "",
+  "【勘定科目】",
+  "会計ソフトはTKC FXクラウドシリーズを想定し、一般的な4桁コードの例を使います（実際の導入時は法人のマスタに合わせます）。",
+  "資産: 1111現金 / 1112郵便貯金 / 1113普通預金 / 1156仮払金　負債: 2115未払費用 / 2117預り金",
+  "費用: 5421通信費 / 5422租税公課 / 5425消耗品費 / 5429支払手数料 / 5434車両費 / 5438会議費 / 5461旅費交通費 / 5412給料手当 / 5443減価償却費 / 6218法定福利費",
+  "収益: 4211自主事業収入 / 4321受取会費 / 4361受取寄附金 / 4379雑収益",
+  "銀行からの出金は貸方に預金科目、入金は借方に預金科目を置くこと。振込手数料が読み取れる場合は別行に分けること。",
+  "",
+  "【日付】",
+  "ユーザーメッセージの冒頭に本日の日付を与えます。明細に年の記載がない場合は本日の年で補完し、",
+  "月日が本日より先になる場合のみ前年とみなすこと。年を補完したときは needsCheck を true にし、note にその旨を書く。",
+  "",
+  "【費目の判断ヒント（日本の実務）】",
+  "来客用の茶菓子・打合せ時の飲食 = 5438会議費 / 手土産・贈答 = 5424接待交際費 / 事務用品・備品 = 5425消耗品費",
+  "ガソリン・車検・洗車 = 5434車両費 / 電車・バス・タクシー・駐車場 = 5461旅費交通費 / 電話・インターネット・切手 = 5421通信費",
+  "銀行の振込手数料 = 5429支払手数料 / 印紙・自動車税 = 5422租税公課",
+  "",
+  "【消費税】",
+  "税込経理を前提とし、taxRate は 0 / 8 / 10 のいずれか。軽減税率対象（飲食料品・新聞）は8。",
+  "公租公課・給与・保険料・海外取引・非課税取引は 0。",
+  "",
+  "【要確認の扱い】",
+  "推測で断定せず、判断材料が足りなければ needsCheck を true にし、理由を note に日本語で簡潔に書くこと。",
+  "特に、部門（事業）コード・取引先コード・免税事業者かどうか・立替か経費かの区別は、明細だけでは確定できないことが多いので needsCheck とする。",
+  "取引先名や日付が明細から素直に読み取れる場合は、それ自体を要確認にはしないこと。",
+  "",
+  "出力は次のJSONのみ。前後に説明文やコードフェンスを付けないこと。値は日本語で書くこと。",
+  '{"entries":[{"date":"YYYY-MM-DD または空","drCd":"借方コード","drName":"借方科目名","crCd":"貸方コード","crName":"貸方科目名","amount":数値,"taxRate":0|8|10,"memo":"元帳摘要（40字以内・取引先名を含める）","needsCheck":true|false,"note":"要確認の理由（無ければ空）"}],"summary":"1〜2文の所見"}',
+].join("\n");
+
+async function trialCount(env, ip, inc) {
+  const day = new Date().toISOString().slice(0, 10);
+  const key = "trial:" + day + ":" + ip;
+  if (env && env.TRIAL_KV) {
+    const cur = parseInt((await env.TRIAL_KV.get(key)) || "0", 10) || 0;
+    if (inc) await env.TRIAL_KV.put(key, String(cur + 1), { expirationTtl: 172800 });
+    return cur;
+  }
+  const cur = TRIAL_MEM.get(key) || 0;
+  if (inc) {
+    if (TRIAL_MEM.size > 5000) TRIAL_MEM.clear();
+    TRIAL_MEM.set(key, cur + 1);
+  }
+  return cur;
+}
+
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
+
+    // 無料お試し（3回まで）: サーバ側のAPIキーで仕訳を生成する
+    if (url.pathname === "/api/demo-shiwake") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+          },
+        });
+      }
+      if (request.method !== "POST") return jsonRes({ error: "POSTしてください" }, 405);
+
+      const apiKey = env && env.ANTHROPIC_API_KEY;
+      if (!apiKey) return jsonRes({ error: "お試し機能は現在準備中です。お手数ですが「導入を相談する」よりお問い合わせください。" }, 503);
+
+      let body = null;
+      try { body = await request.json(); } catch (e) { body = null; }
+      const text = body && typeof body.text === "string" ? body.text.slice(0, 600).trim() : "";
+      if (!text) return jsonRes({ error: "明細のテキストを入力してください。" }, 400);
+
+      const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+      const used = await trialCount(env, ip, false);
+      if (used >= TRIAL_LIMIT) {
+        return jsonRes({ error: "無料お試しは1日3回までです。続きは個別デモでご案内します。", limitReached: true }, 429);
+      }
+      await trialCount(env, ip, true);
+
+      try {
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+          body: JSON.stringify({
+            model: (env && env.DEMO_MODEL) || "claude-haiku-4-5",
+            max_tokens: 900,
+            system: [{ type: "text", text: DEMO_SYSTEM, cache_control: { type: "ephemeral" } }],
+            messages: [{ role: "user", content: "本日の日付: " + new Date().toISOString().slice(0, 10) + "\n---\n以下の明細を仕訳の下書きにしてください。\n" + text }],
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) return jsonRes({ error: (data && data.error && data.error.message) || "AIの呼び出しに失敗しました。" }, 502);
+        let raw = "";
+        for (const b of data.content || []) { if (b.type === "text") raw += b.text; }
+        raw = raw.replace(/^[\s\S]*?({[\s\S]*})[\s\S]*$/, "$1");
+        let parsed = null;
+        try { parsed = JSON.parse(raw); } catch (e) { parsed = null; }
+        if (!parsed || !Array.isArray(parsed.entries)) return jsonRes({ error: "仕訳を組み立てられませんでした。入力内容を少し具体的にしてお試しください。" }, 200);
+        return jsonRes({ result: parsed, remaining: Math.max(0, TRIAL_LIMIT - (used + 1)) });
+      } catch (e) {
+        return jsonRes({ error: "通信エラーが発生しました。時間をおいてお試しください。" }, 502);
+      }
+    }
 
     // Anthropic API proxy endpoint (avoids CORS)
     if (url.pathname === "/api/cc-read" && request.method === "POST") {
@@ -103,6 +228,15 @@ tr:hover td{background:#fafaf8}
 input,select{font-family:'Noto Sans JP',sans-serif;font-size:11px;padding:3px 6px;border:.5px solid var(--bd2);border-radius:3px;background:var(--sf);color:var(--ink);outline:none}
 input:focus,select:focus{border-color:#999}
 .chip{font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px}
+.mdmode{font-size:12px;font-weight:700;padding:8px 14px;border-radius:6px;border:1px solid var(--bd2);background:#fff;color:#888;cursor:pointer;font-family:inherit;transition:all .15s}
+.mdmode.on{background:var(--bl);border-color:var(--bl);color:#fff}
+.mdcard{display:flex;align-items:flex-start;gap:10px;border:1px solid var(--bd2);border-radius:7px;padding:11px 12px;margin-bottom:7px;cursor:pointer;background:#fff;transition:all .15s}
+.mdcard:hover{border-color:var(--bl)}
+.mdcard.sel{border-color:var(--bl);border-width:1.5px;background:var(--blbg)}
+.mdcard.off{opacity:.4;cursor:not-allowed}
+.mdname{font-size:12.5px;font-weight:700;color:var(--ink)}
+.mdmeta{font-size:11px;color:var(--ink3);line-height:1.7;margin-top:2px;display:block}
+.mdprice{font-family:monospace;font-size:11px;color:var(--ink2);white-space:nowrap;margin-left:auto;text-align:right}
 .cg{background:var(--gnbg);color:var(--gn)}.cb{background:var(--blbg);color:var(--bl)}
 .ca{background:var(--ambg);color:var(--am)}.cgr{background:#f0f0f0;color:#888}
 .jr{background:var(--sf);border:.5px solid var(--bd);border-radius:var(--r);overflow:hidden;margin-bottom:5px}
@@ -196,7 +330,7 @@ input:focus,select:focus{border-color:#999}
     <div class="cardh"><span class="cardt">対応会計ソフト（上のボタンで切替）</span></div>
     <div style="padding:14px">
       <div class="swcards">
-        <div class="swcard act" id="swc-tkc"><div style="font-size:15px;font-weight:700;color:var(--cy);margin-bottom:3px">TKC</div><div style="font-size:10px;color:#888;margin-bottom:6px">29カラム形式</div><span class="chip cg">✓ 対応済み</span></div>
+        <div class="swcard act" id="swc-tkc"><div style="font-size:15px;font-weight:700;color:var(--cy);margin-bottom:3px">TKC</div><div style="font-size:10px;color:#888;margin-bottom:6px">29列CSV / SLP</div><span class="chip cg">✓ 対応済み</span></div>
         <div class="swcard" id="swc-yayoi"><div style="font-size:15px;font-weight:700;color:#e85a10;margin-bottom:3px">弥生</div><div style="font-size:10px;color:#888;margin-bottom:6px">弥生インポート形式</div><span class="chip" style="background:#eee;color:#888;font-size:9px">5月公開予定</span></div>
         <div class="swcard" id="swc-freee"><div style="font-size:15px;font-weight:700;color:#00b894;margin-bottom:3px">freee</div><div style="font-size:10px;color:#888;margin-bottom:6px">取引インポート18列</div><span class="chip cg">✓ 対応済み</span></div>
         <div class="swcard" id="swc-mf"><div style="font-size:15px;font-weight:700;color:#0066cc;margin-bottom:3px">MF</div><div style="font-size:10px;color:#888;margin-bottom:6px">仕訳インポート形式</div><span class="chip" style="background:#eee;color:#888;font-size:9px">5月公開予定</span></div>
@@ -274,6 +408,7 @@ input:focus,select:focus{border-color:#999}
   </div>
   <div id="cc-prev" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
   <div class="ld" id="cc-ld"><div class="spin"></div><span>Claude AIで読み取り中...</span></div>
+  <div style="font-size:11px;color:var(--ink3);margin:-4px 0 8px">使用モデル: <span id="cc-model" style="font-family:monospace"></span> ／ 変更は左メニュー「API設定」から</div>
   <div id="cc-cont" style="display:none">
     <div class="card" style="margin-bottom:10px">
       <div class="cardh"><span class="cardt">支払情報</span></div>
@@ -295,7 +430,7 @@ input:focus,select:focus{border-color:#999}
 <!-- OUTPUT -->
 <div class="sec" id="sec-out">
   <div class="shd">
-    <div><div class="stitle">出力確認</div><div class="ssub" id="out-lbl">出力形式: TKC 29カラム</div></div>
+    <div><div class="stitle">出力確認</div><div class="ssub" id="out-lbl">出力形式: TKC 29カラム</div><div style="font-size:11px;color:#b45309;margin-top:3px">⚠ ここに出るのはAIの下書きです。会計ソフトへ取り込む前に、必ず内容を確認してください。</div></div>
     <div style="display:flex;gap:6px">
       <button class="btn btn-g" onclick="downloadAll()">⬇ CSV出力</button>
       <button class="btn" style="background:#217346;color:#fff;border-color:#217346" onclick="downloadAll('xlsx')">⬇ Excel出力</button>
@@ -322,9 +457,27 @@ input:focus,select:focus{border-color:#999}
       </div>
       <div id="g-st" style="display:none;padding:8px 12px;border-radius:5px;font-size:12px;font-weight:600;margin-top:10px"></div>
     </div></div>
+
+    <div class="card" style="margin-top:12px"><div style="padding:18px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px">使うAIモデルを選ぶ</div>
+      <div style="font-size:11px;color:var(--ink3);line-height:1.7;margin-bottom:12px">
+        写真・PDFの解析が必要かどうかで、使えるモデルと料金が変わります。まず用途を選んでください。
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button type="button" class="mdmode on" id="mdm-img" onclick="mdMode('img')">📷 写真・PDFを読む</button>
+        <button type="button" class="mdmode" id="mdm-txt" onclick="mdMode('txt')">📝 テキストだけ</button>
+      </div>
+
+      <div style="font-size:11px;color:var(--ink3);margin-bottom:7px" id="md-hint"></div>
+      <div id="md-list"></div>
+
+      <div style="margin-top:12px;background:var(--sf);border:.5px solid var(--bd);border-radius:var(--r);padding:10px 12px;font-size:11.5px;line-height:1.8" id="md-cost"></div>
+    </div></div>
+
     <div style="background:var(--blbg);border:.5px solid rgba(26,74,154,.15);border-radius:var(--r);padding:12px 14px;font-size:12px;line-height:1.8;margin-top:10px">
       🔒 APIキーはブラウザのlocalStorageにのみ保存。外部送信なし。<br>
-      💰 カード明細1回の読取 約¥5 / 月1回で年間約¥60
+      💰 料金は選んだモデルによって変わります（上の目安を参照）。
     </div>
   </div>
 </div>
@@ -339,6 +492,78 @@ input:focus,select:focus{border-color:#999}
 // =============================================
 var SW = 'tkc';
 var fixedRows = [], bankRows = [], ccCards = [], ccImgs = [];
+
+// ── AIモデル選択（写真解析の要否で有効な選択肢が変わる）──────────────
+// 単価は Anthropic 公式の1Mトークンあたり（USD）。円換算は 1USD=155円 の概算。
+var MODELS = [
+  {id:'claude-haiku-4-5', name:'Claude Haiku 4.5', vision:true, inp:1, out:5,
+   note:'最安。定型のカード明細・レシートならこれで十分。まずはここから。', tag:'コスト重視'},
+  {id:'claude-sonnet-5',  name:'Claude Sonnet 5',  vision:true, inp:2, out:10,
+   note:'精度と価格のバランス型。手書き混じり・レイアウトが崩れた明細に。', tag:'バランス'},
+  {id:'claude-opus-5',    name:'Claude Opus 5',    vision:true, inp:5, out:25,
+   note:'最高精度。判読しにくい写真や、金額内訳の推論までさせたいとき。', tag:'精度優先'}
+];
+var USDJPY = 155;
+function mdGetMode(){ return localStorage.getItem('tkc_ai_mode') || 'img'; }
+function mdKey(){ return mdGetMode()==='img' ? 'tkc_model_img' : 'tkc_model_txt'; }
+function mdGet(){ return localStorage.getItem(mdKey()) || 'claude-haiku-4-5'; }
+// カード明細1枚あたりの概算（入力 約2,000トークン＋出力 約1,500トークン）
+function mdYen(m){ return Math.round((2000/1e6*m.inp + 1500/1e6*m.out) * USDJPY * 10) / 10; }
+function mdEl(tag, cls, txt){
+  var e=document.createElement(tag);
+  if(cls) e.className=cls;
+  if(txt!=null) e.textContent=txt;
+  return e;
+}
+function mdMode(mode){
+  localStorage.setItem('tkc_ai_mode', mode);
+  var a=document.getElementById('mdm-img'), b=document.getElementById('mdm-txt');
+  if(a) a.className = 'mdmode' + (mode==='img'?' on':'');
+  if(b) b.className = 'mdmode' + (mode==='txt'?' on':'');
+  mdRender();
+}
+function mdPick(id){
+  localStorage.setItem(mdKey(), id);
+  mdRender();
+  if(typeof ccModelLabel==='function') ccModelLabel();
+}
+function mdRender(){
+  var box=document.getElementById('md-list'); if(!box) return;
+  var mode=mdGetMode(), cur=mdGet();
+  var hint=document.getElementById('md-hint');
+  if(hint) hint.textContent = mode==='img'
+    ? '画像・PDFを読めるモデルだけを表示しています（カード明細AI読取で使用）。'
+    : 'テキストのみの処理です。画像を読ませない分だけ入力トークンが減り、安く済みます。';
+  while(box.firstChild) box.removeChild(box.firstChild);
+  MODELS.forEach(function(m){
+    var usable = (mode!=='img') || m.vision;
+    var lab = mdEl('label', 'mdcard' + (m.id===cur?' sel':'') + (usable?'':' off'));
+    var rb = document.createElement('input');
+    rb.type='radio'; rb.name='mdsel'; rb.checked=(m.id===cur); rb.disabled=!usable;
+    rb.style.marginTop='3px';
+    rb.addEventListener('change', function(){ mdPick(m.id); });
+    var mid = mdEl('span'); mid.style.flex='1';
+    mid.appendChild(mdEl('span','mdname', m.name));
+    var tag = mdEl('span','chip', m.tag);
+    tag.style.background='var(--blbg)'; tag.style.color='var(--bl)'; tag.style.marginLeft='6px';
+    mid.appendChild(tag);
+    mid.appendChild(mdEl('span','mdmeta', m.note));
+    var pr = mdEl('span','mdprice', '$' + m.inp + ' / $' + m.out);
+    pr.appendChild(document.createElement('br'));
+    var u = mdEl('span', null, '入力/出力 per 1M'); u.style.color='#aaa';
+    pr.appendChild(u);
+    lab.appendChild(rb); lab.appendChild(mid); lab.appendChild(pr);
+    box.appendChild(lab);
+  });
+  var sel = MODELS.filter(function(m){return m.id===cur;})[0] || MODELS[0];
+  var c=document.getElementById('md-cost');
+  if(c) c.textContent = mode==='img'
+    ? '💰 ' + sel.name + '：カード明細の読取 約¥' + mdYen(sel) + ' / 1枚（入力2,000＋出力1,500トークン、1USD='
+      + USDJPY + '円で概算）。月1回なら年間 約¥' + Math.round(mdYen(sel)*12) + '。'
+    : '💰 ' + sel.name + '：テキストのみの処理は入力トークンが少なく、上記より安くなります。'
+      + 'なお銀行CSV・定型仕訳の変換自体はAIを使わないため無料です。';
+  if(typeof ccModelLabel==='function') ccModelLabel();
+}
 var ccPayDate = '', ccTotal = 0;
 var loaded = {}, rowId = 0, ccRid = 0, nid = 0;
 
@@ -417,6 +642,7 @@ var CAT_B = {給与:'var(--gnbg)',減価償却:'var(--blbg)',地代家賃:'var(-
 // =============================================
 (function init(){
   fixedRows = DEFAULT_MASTER.map(function(d){ return Object.assign({},d); });
+  mdMode(mdGetMode());
   renderFixed();
   updateTop();
   var k = localStorage.getItem('tkc_api_key');
@@ -745,7 +971,7 @@ async function ccAPI(apiKey){
     var res=await fetch('/api/cc-read',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({apiKey:apiKey,payload:{model:'claude-sonnet-4-20250514',max_tokens:4000,messages:[{role:'user',content:[...imgs,{type:'text',text:prompt}]}]}})
+      body:JSON.stringify({apiKey:apiKey,payload:{model:(localStorage.getItem('tkc_model_img')||'claude-haiku-4-5'),max_tokens:4000,messages:[{role:'user',content:[...imgs,{type:'text',text:prompt}]}]}})
     });
     if(!res.ok){var e=await res.json();throw new Error((e.error&&e.error.message)||res.status);}
     var data=await res.json();
@@ -1090,6 +1316,10 @@ function resetAll(){
 // =============================================
 // APIキー
 // =============================================
+function ccModelLabel(){
+  var e=document.getElementById('cc-model');
+  if(e) e.textContent = localStorage.getItem('tkc_model_img') || 'claude-haiku-4-5';
+}
 function saveKey(val){
   if(val&&val.indexOf('sk-ant')===0){localStorage.setItem('tkc_api_key',val);var e=document.getElementById('cc-kst');if(e)e.textContent='✓ 保存済み';}
   else if(!val){localStorage.removeItem('tkc_api_key');var e2=document.getElementById('cc-kst');if(e2)e2.textContent='';}
@@ -1151,7 +1381,7 @@ function notif(msg,cls){
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TKC仕訳インポートツール | 一般社団法人サーコミュニケーション</title>
-<meta name="description" content="銀行明細・クレジットカード・月末定型仕訳を自動変換。TKCへのインポートCSVをワンクリックで生成する経理自動化ツール。">
+<meta name="description" content="銀行明細・クレジットカード・月末定型仕訳をAIが下書きし、TKCへのインポートCSVを生成。確定は必ず人が確認する半自動化ツール。TKC FXクラウドの他社システム自動仕訳（SLP／CLS）の生成まで実務で運用しています。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&family=Noto+Serif+JP:wght@400;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -1584,6 +1814,35 @@ footer{
 .reveal{opacity:0;transform:translateY(28px);transition:opacity .7s ease,transform .7s ease}
 .reveal.visible{opacity:1;transform:translateY(0)}
 
+/* ── TRIAL SECTION ── */
+.trial-sample{
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);color:rgba(255,255,255,.8);
+  font-size:11.5px;padding:7px 12px;border-radius:20px;cursor:pointer;font-family:inherit;transition:all .2s;
+}
+.trial-sample:hover{background:rgba(92,200,255,.16);border-color:rgba(92,200,255,.5);color:#fff}
+#trial-go:hover{background:#0090ee}
+#trial-go[disabled]{opacity:.5;cursor:not-allowed}
+.trial-tbl{width:100%;border-collapse:collapse;font-size:12.5px;color:#e9eef4}
+.trial-tbl th{background:rgba(255,255,255,.06);color:rgba(255,255,255,.6);font-weight:600;text-align:left;padding:9px 10px;font-size:11px;letter-spacing:.04em;white-space:nowrap}
+.trial-tbl td{border-top:1px solid rgba(255,255,255,.1);padding:10px;vertical-align:top}
+.trial-num{font-family:'DM Mono',monospace;text-align:right;white-space:nowrap}
+.trial-chk{display:inline-block;background:rgba(245,158,11,.18);color:#fbbf24;border:1px solid rgba(245,158,11,.4);font-size:10px;font-weight:700;padding:1px 7px;border-radius:3px}
+.trial-ok{display:inline-block;background:rgba(16,185,129,.15);color:#34d399;border:1px solid rgba(16,185,129,.35);font-size:10px;font-weight:700;padding:1px 7px;border-radius:3px}
+.trial-scroll{overflow-x:auto}
+
+/* ── SLP SECTION ── */
+.slp-g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:44px}
+.slp-g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.slp-g5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+@media(max-width:900px){
+  .slp-g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .slp-g3{grid-template-columns:1fr}
+  .slp-g5{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:560px){
+  .slp-g4,.slp-g5{grid-template-columns:1fr}
+}
+
 /* ── RESPONSIVE ── */
 @media(max-width:768px){
   nav{padding:0 20px}
@@ -1607,6 +1866,9 @@ footer{
   <div class="nav-links">
     <a href="#features">機能</a>
     <a href="#howto">使い方</a>
+    <a href="#human">確認の考え方</a>
+    <a href="#slp">SLP実績</a>
+    <a href="#trial">無料お試し</a>
     <a href="#spec">仕様</a>
     <a href="#cost">料金</a>
     <a href="#contact">お問い合わせ</a>
@@ -1621,19 +1883,20 @@ footer{
   <div class="hero-bg-ring"></div>
   <div class="hero-glow"></div>
 
-  <div class="hero-badge">Claude AI × TKC経理自動化</div>
+  <div class="hero-badge">TKC SLP（他社システム自動仕訳）実運用 × Claude AI</div>
 
   <h1 class="hero-title">
-    月次経理を、<br><span>自動化する。</span>
+    月次経理を、<br><span>半自動化する。</span>
   </h1>
-  <p class="hero-sub-title">AI 仕訳インポートツール</p>
+  <p class="hero-sub-title">AI 仕訳インポートツール ── 最後の確認は、人が行います</p>
   <p class="hero-desc">
-    銀行明細・クレジットカード・月末定型仕訳を自動変換。<br>
-    TKC・freee会計に対応したインポートCSVをワンクリックで生成します。弥生会計・マネーフォワード対応版も開発中。
+    銀行明細・クレジットカード・月末定型仕訳を、AIが下書きします。<br>
+    TKC・freee会計に対応したインポートCSVをワンクリックで生成します。弥生会計・マネーフォワード対応版も開発中。<br>
+    <span style="color:var(--cyan);font-weight:600">さらに、TKC FXクラウドシリーズの「他社システム自動仕訳の読込」用 SLP／CLS ファイル（タブ区切り・cp932・zip）の生成まで、実際の月次決算業務で運用しています。</span>
   </p>
   <div class="hero-btns">
     <a class="btn-primary" href="https://keiri-yayoi-freee.kaneda-ryota.workers.dev/tool.html" target="_blank">&#9654;&#xFE0E; 今すぐ無料で試す</a>
-    <a class="btn-secondary" href="#features">機能を見る</a>
+    <a class="btn-secondary" href="#trial">3回無料でお試し</a>
     <a class="btn-secondary" href="https://surc.online/" target="_blank" rel="noopener" style="border-color:rgba(0,120,200,.2)">導入を相談する</a>
   </div>
 
@@ -1651,9 +1914,57 @@ footer{
       <div class="hero-stat-l">銀行CSV 同時対応</div>
     </div>
   </div>
+
+  <div style="margin-top:40px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;animation:fadeUp .8s .7s ease both">
+    <span style="font-size:11px;font-weight:600;color:var(--cyan);border:1px solid var(--border2);border-radius:20px;padding:6px 14px;background:rgba(255,255,255,.6)">SLP 47列 ＋ CLS 部門明細 対応</span>
+    <span style="font-size:11px;font-weight:600;color:var(--cyan);border:1px solid var(--border2);border-radius:20px;padding:6px 14px;background:rgba(255,255,255,.6)">月次決算で本番運用中</span>
+    <span style="font-size:11px;font-weight:600;color:var(--cyan);border:1px solid var(--border2);border-radius:20px;padding:6px 14px;background:rgba(255,255,255,.6)">取込後のTKC突合まで実施</span>
+    <span style="font-size:11px;font-weight:600;color:#0a7c5a;border:1px solid rgba(10,124,90,.3);border-radius:20px;padding:6px 14px;background:rgba(255,255,255,.6)">確定は必ず人が行う設計</span>
+  </div>
+  <p style="margin-top:14px;font-size:11px;color:var(--ink3)">※ 実運用に基づく記録です。導入先法人名・取引先名・個人名は非開示とし、本ページの固有名・コード例はすべて説明用の仮名です。</p>
 </section>
 
 <!-- PROBLEM -->
+
+
+<!-- HUMAN IN THE LOOP -->
+<div class="section-full" id="human" style="background:#f8fbff;border-top:1px solid rgba(0,0,0,.06);border-bottom:1px solid rgba(0,0,0,.06)">
+  <div class="section reveal" style="padding-top:0;padding-bottom:0">
+    <p class="s-label">Human in the loop</p>
+    <h2 class="s-title">「全自動」とは言いません。<br>最後は、人が確認します。</h2>
+    <p class="s-desc" style="max-width:780px">
+      経理は間違いが許されない仕事です。だから当社のツールは、AIに最後まで決めさせません。
+      AIがやるのは<strong>読み取り・分類・下書き</strong>まで。確定させるのは必ず人です。
+      目標は「人が見なくていい状態」をつくることではなく、<strong>その確認が数分で終わる状態</strong>をつくることです。
+    </p>
+
+    <div class="slp-g3" style="margin-top:40px">
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:26px;border-top:3px solid #0078c8">
+        <div style="font-size:11px;font-weight:700;color:#0078c8;letter-spacing:.06em;margin-bottom:8px">01 AIは下書きまで</div>
+        <h3 style="font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:10px">決めるのは人、揃えるのがAI</h3>
+        <p style="font-size:12.5px;color:#777;line-height:1.85">勘定科目・部門・取引先・税区分の<strong>候補</strong>を、過去の仕訳とマスタから提示します。AIの出力はあくまで下書きで、承認するまで会計ソフトには入りません。</p>
+      </div>
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:26px;border-top:3px solid #b45309">
+        <div style="font-size:11px;font-weight:700;color:#b45309;letter-spacing:.06em;margin-bottom:8px">02 見るべき行だけ光らせる</div>
+        <h3 style="font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:10px">★要確認ハイライト</h3>
+        <p style="font-size:12.5px;color:#777;line-height:1.85">判断材料が足りない行、過去と食い違う行、新規の取引先だけに<strong>★要確認</strong>を立てて色を付けます。全件を見直す必要はなく、目を向けるべき数行に集中できます。</p>
+      </div>
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:26px;border-top:3px solid #0a7c5a">
+        <div style="font-size:11px;font-weight:700;color:#0a7c5a;letter-spacing:.06em;margin-bottom:8px">03 未確認は先へ進めない</div>
+        <h3 style="font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:10px">提出ゲートで機械的に止める</h3>
+        <p style="font-size:12.5px;color:#777;line-height:1.85">SLP生成の実運用では、<strong>★要確認が1件でも残っていれば提出不可</strong>としてエラー終了させています。「確認したつもり」で会計ソフトに入ってしまう事故を、仕組みで防ぎます。</p>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;background:#fff;border:1px solid rgba(0,120,200,.18);border-radius:10px;padding:20px 24px;display:flex;align-items:flex-start;gap:14px">
+      <span style="font-size:22px;flex-shrink:0;margin-top:2px">👤</span>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:4px">半自動化＝人の判断を残したまま、手を動かす時間だけを削る</div>
+        <p style="font-size:13px;color:#666;line-height:1.85;margin:0">転記・分類・フォーマット変換といった「間違いようがあるのに頭を使わない作業」はAIに任せ、勘定科目の判断や事業への配分といった「人が責任を持つべき判断」は人の手元に残します。監査や税理士の確認を受ける前提の帳簿だからこそ、この線引きを崩しません。</p>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- SUPPORTED SOFTWARE -->
 <div style="background:#fff;border-top:1px solid rgba(0,0,0,.07);border-bottom:1px solid rgba(0,0,0,.07)">
@@ -1675,8 +1986,8 @@ footer{
             <div style="font-size:11px;color:#999">税理士向け会計システム</div>
           </div>
         </div>
-        <div style="font-size:12px;color:#555;line-height:1.8;margin-bottom:14px">税理士事務所・法人で広く使われる高機能会計システム。独自の29カラムCSV形式でのインポートに完全対応。銀行明細・カード・定型仕訳をワンクリックで生成します。</div>
-        <div style="background:#0078c8;border-radius:6px;padding:8px 10px;font-size:11px;color:#fff;font-weight:600;text-align:center">✓ 29カラム形式CSV 完全対応</div>
+        <div style="font-size:12px;color:#555;line-height:1.8;margin-bottom:14px">税理士事務所・法人で広く使われる高機能会計システム。仕訳読込テンプレートに合わせた29列CSVの生成に対応し、さらに「他社システム自動仕訳の読込」用のSLP／CLS生成まで実務で運用しています。</div>
+        <div style="background:#0078c8;border-radius:6px;padding:8px 10px;font-size:11px;color:#fff;font-weight:600;text-align:center">✓ 29列CSV ＋ SLP／CLS 対応</div>
       </div>
 
       <!-- 弥生: 開発対応 -->
@@ -1736,6 +2047,158 @@ footer{
   </div>
 </div>
 
+
+<!-- SLP TRACK RECORD -->
+<div class="section-full" id="slp" style="background:linear-gradient(180deg,#f8fbff 0%,#ffffff 100%);border-bottom:1px solid rgba(0,0,0,.07)">
+  <div class="section reveal" style="padding-top:0;padding-bottom:0">
+    <p class="s-label">Track Record — TKC SLP</p>
+    <h2 class="s-title">CSVの、その先。<br>TKCの「他社システム自動仕訳」SLPを実務で作っています。</h2>
+    <p class="s-desc" style="max-width:780px">
+      TKC FXクラウドシリーズには、Excel／CSVの仕訳読込テンプレートとは別に、
+      <strong>「日常業務 ＞ 他社システム自動仕訳の読込」</strong>という取込口があります。ここで読ませるのが
+      <strong>タブ区切りテキスト・拡張子 .slp（部門明細は .cls）・zip に格納して取込む</strong>SLPファイルです。
+      当社が運用しているレイアウトは<strong>47列・改行CRLF・文字コード cp932</strong>。一般的な会計ソフトのCSVとはまったく別物で、
+      1列でも構造を外すとファイルごと読み込まれません。当社はこの SLP／CLS の生成を、
+      あるNPO法人（複数拠点・複数事業／FX2NPO法人会計クラウド）の<strong>月次決算業務のなかで継続運用</strong>しています。
+    </p>
+
+    <div class="slp-g4">
+      <div style="background:#fff;border:1px solid rgba(0,120,200,.2);border-radius:12px;padding:24px">
+        <div style="font-family:'DM Mono',monospace;font-size:32px;font-weight:500;color:var(--cyan);line-height:1">47<span style="font-size:.45em;color:var(--ink3);margin-left:2px">列</span></div>
+        <div style="font-size:12px;font-weight:700;color:#1a1a1a;margin-top:10px">SLP 全列に準拠</div>
+        <div style="font-size:12px;color:#777;line-height:1.7;margin-top:4px">課税区分・事業区分・補助コード・部門コード・消費税率・適格請求書登録番号（T＋13桁）まで実装。※列数・必須項目はご利用製品／バージョンにより異なります。</div>
+      </div>
+      <div style="background:#fff;border:1px solid rgba(0,120,200,.2);border-radius:12px;padding:24px">
+        <div style="font-family:'DM Mono',monospace;font-size:32px;font-weight:500;color:var(--cyan);line-height:1">7<span style="font-size:.45em;color:var(--ink3);margin-left:2px">本</span></div>
+        <div style="font-size:12px;font-weight:700;color:#1a1a1a;margin-top:10px">毎月生成するSLP（zip）</div>
+        <div style="font-size:12px;color:#777;line-height:1.7;margin-top:4px">銀行5口座＋現金出納帳＋減価償却を口座別に生成。日本語ヘッダの確認用Excelも同時に出力。</div>
+      </div>
+      <div style="background:#fff;border:1px solid rgba(0,120,200,.2);border-radius:12px;padding:24px">
+        <div style="font-family:'DM Mono',monospace;font-size:32px;font-weight:500;color:var(--cyan);line-height:1">4<span style="font-size:.45em;color:var(--ink3);margin-left:2px">年分</span></div>
+        <div style="font-size:12px;font-weight:700;color:#1a1a1a;margin-top:10px">過去仕訳を辞書化</div>
+        <div style="font-size:12px;color:#777;line-height:1.7;margin-top:4px">過去仕訳・取引先マスタ・請求書と突合し、相手勘定科目／部門／課税区分／取引先コードを推定。</div>
+      </div>
+      <div style="background:#fff;border:1px solid rgba(0,120,200,.2);border-radius:12px;padding:24px">
+        <div style="font-family:'DM Mono',monospace;font-size:32px;font-weight:500;color:var(--cyan);line-height:1">34<span style="font-size:.45em;color:var(--ink3);margin-left:2px">件</span></div>
+        <div style="font-size:12px;font-weight:700;color:#1a1a1a;margin-top:10px">取込後の突合で即日検知</div>
+        <div style="font-size:12px;color:#777;line-height:1.7;margin-top:4px">ある月の実データで、修正28件・未反映6件を検知。あわせて減価償却の二重計上1件も自動検出。</div>
+      </div>
+    </div>
+
+    <h3 style="font-family:'Noto Serif JP',serif;font-size:19px;font-weight:700;color:#1a1a1a;margin:56px 0 8px">SLPでつまずく3つの落とし穴と、その対処</h3>
+    <p style="font-size:13px;color:#777;line-height:1.9;margin-bottom:24px">いずれも実際の取込エラーから確定させた知見です。仕様書を読むだけでは見えてこない部分です。</p>
+
+    <div class="slp-g3">
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:26px;border-top:3px solid #b45309">
+        <div style="font-size:11px;font-weight:700;color:#b45309;letter-spacing:.06em;margin-bottom:8px">落とし穴 01</div>
+        <h4 style="font-size:14px;font-weight:700;color:#1a1a1a;margin-bottom:10px">課税区分52はCLSが無いと全件落ちる</h4>
+        <p style="font-size:12.5px;color:#777;line-height:1.85">免税事業者等からの課税仕入れ（経過措置）の課税区分 <strong>52・53・62・63・72・73</strong> が<strong>1件でも</strong>含まれると、部門明細ファイル（.cls）に部門税込金額をセットしない限り<strong>ファイル全体の読込が中止</strong>されます。部門金額入力区分の切替とCLS生成を自動化し、該当月でも取込が止まりません。<br><span style="color:#b45309">控除割合は令和8年9月30日までの課税仕入れが80%、令和8年10月1日以後は70%（適用期限2年延長）。区分の運用が変わる端境期こそ、機械的な検証が効きます。</span></p>
+      </div>
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:26px;border-top:3px solid #0078c8">
+        <div style="font-size:11px;font-weight:700;color:#0078c8;letter-spacing:.06em;margin-bottom:8px">落とし穴 02</div>
+        <h4 style="font-size:14px;font-weight:700;color:#1a1a1a;margin-bottom:10px">部門コードは「空欄」も「000」も使えない</h4>
+        <p style="font-size:12.5px;color:#777;line-height:1.85">NPO法人会計では部門コードが必須で、未登録の000を入れると「事業コードが誤っています」で弾かれます。共通費・貸借対照表科目・振替は調整用の部門へ寄せ、部門数は1、課税売上では事業区分を切り替える——という組み立てが必要です。</p>
+      </div>
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:26px;border-top:3px solid #0a7c5a">
+        <div style="font-size:11px;font-weight:700;color:#0a7c5a;letter-spacing:.06em;margin-bottom:8px">落とし穴 03</div>
+        <h4 style="font-size:14px;font-weight:700;color:#1a1a1a;margin-bottom:10px">自動化が進むほど「二重計上」が増える</h4>
+        <p style="font-size:12.5px;color:#777;line-height:1.85">銀行CSV・現金出納帳・カード明細を別々に自動化すると、同じ取引が二重に載ります。自法人口座間の振替は出金側で1本だけ、ATMでの現金預入は現金出納帳側に寄せてSLPからは除外——という境界設計を先に決めるのが要点です。</p>
+      </div>
+    </div>
+
+    <h3 style="font-family:'Noto Serif JP',serif;font-size:19px;font-weight:700;color:#1a1a1a;margin:56px 0 24px">毎月まわしている5ステップ</h3>
+    <div class="slp-g5">
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:10px;padding:20px 18px">
+        <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--cyan);margin-bottom:8px">STEP 1</div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:6px">集める</div>
+        <div style="font-size:12px;color:#777;line-height:1.75">銀行CSV・カード請求明細・現金出納帳・請求書スキャンを1か所に集約。</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:10px;padding:20px 18px">
+        <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--cyan);margin-bottom:8px">STEP 2</div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:6px">推定する</div>
+        <div style="font-size:12px;color:#777;line-height:1.75">過去仕訳と取引先マスタから相手勘定・部門・課税区分を推定。判断できない行は★要確認として残す。</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:10px;padding:20px 18px">
+        <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--cyan);margin-bottom:8px">STEP 3</div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:6px">生成する</div>
+        <div style="font-size:12px;color:#777;line-height:1.75">47列SLP＋CLSを口座別に生成してzip化。目視確認用のExcelを同時出力。</div>
+      </div>
+      <div style="border:1px solid rgba(0,120,200,.35);border-radius:10px;padding:20px 18px;background:#f0f6ff">
+        <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--cyan);margin-bottom:8px">STEP 4</div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:6px">提出ゲート</div>
+        <div style="font-size:12px;color:#555;line-height:1.75">残高チェーン・貸借・課税↔税率・部門実在・二重計上を全件検査。<strong>★要確認が1件でも残ればエラー終了＝提出不可</strong>。</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2dfd8;border-radius:10px;padding:20px 18px">
+        <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--cyan);margin-bottom:8px">STEP 5</div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:6px">取込後に突合</div>
+        <div style="font-size:12px;color:#777;line-height:1.75">取込後のTKC仕訳帳と生成SLPを照合し、修正・未反映・手入力追加・二重計上を洗い出す。</div>
+      </div>
+    </div>
+
+    <div style="margin-top:28px;background:#fff;border:1px solid rgba(0,120,200,.18);border-radius:10px;padding:20px 24px;display:flex;align-items:flex-start;gap:14px">
+      <span style="font-size:22px;flex-shrink:0;margin-top:2px">🧾</span>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:4px">SLP対応は個別構築でのご提供です</div>
+        <p style="font-size:13px;color:#666;line-height:1.85;margin:0">関与先コード・勘定科目・補助コード・部門（事業）コードは法人ごとに異なるため、SLP生成はブラウザツールではなく、貴法人のマスタに合わせた個別構築としてご提供しています。まずは現在のTKC設定と月次フローをお聞かせください。</p>
+      </div>
+    </div>
+
+    <p style="margin-top:16px;font-size:11px;color:var(--ink3);line-height:1.8">
+      ※ 記載の実績はすべて実際の月次運用の記録に基づきます。導入先法人名・取引先名・担当者名・口座名義等は非開示とし、本ページに登場する固有名・コード例はすべて説明用の仮名です。
+    </p>
+  </div>
+</div>
+
+
+<!-- FREE TRIAL -->
+<div class="section-full" id="trial" style="background:#0f1720;border-bottom:1px solid rgba(255,255,255,.08)">
+  <div class="section reveal" style="padding-top:0;padding-bottom:0">
+    <p class="s-label" style="color:#5cc8ff">Free Trial</p>
+    <h2 class="s-title" style="color:#fff">3回まで無料。<br>いま、その場で仕訳にしてみてください。</h2>
+    <p class="s-desc" style="color:rgba(255,255,255,.7);max-width:720px">
+      銀行明細の1行でも、レシートの内容でも構いません。そのまま貼り付けて「仕訳にする」を押すと、
+      借方・貸方・税率・摘要までAIが下書きします。<strong style="color:#fff">APIキーの登録も、会員登録も不要です。</strong>
+      出てくるのは確定した仕訳ではなく、<strong style="color:#fff">人が確認するための下書き</strong>です。
+    </p>
+
+    <div style="margin-top:36px;background:#151f2b;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:26px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:#fff">明細テキストを貼り付け</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.6)">残り <span id="trial-left" style="font-family:'DM Mono',monospace;font-size:15px;color:#5cc8ff;font-weight:700">3</span> / 3 回</div>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button type="button" class="trial-sample" data-s="2026/09/01 振込 カ）ダイイチシヨウジ 132,000 出金">例1: 銀行の振込出金</button>
+        <button type="button" class="trial-sample" data-s="9/3 コンビニで来客用のお茶とお菓子を購入 1,480円（軽減税率8%対象を含む）">例2: レシート（軽減税率）</button>
+        <button type="button" class="trial-sample" data-s="2026/09/05 ガソリン給油 5,500円 クレジットカード払い 車両1台分">例3: カード払いのガソリン代</button>
+      </div>
+
+      <textarea id="trial-in" rows="4" maxlength="600" placeholder="例）2026/09/01 振込 カ）ダイイチシヨウジ 132,000 出金"
+        style="width:100%;background:#0b131c;border:1px solid rgba(255,255,255,.18);border-radius:8px;color:#fff;font-size:14px;line-height:1.7;padding:14px;resize:vertical;font-family:inherit"></textarea>
+
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px">
+        <button type="button" id="trial-go" style="background:#0078c8;color:#fff;border:none;padding:13px 30px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">仕訳にする</button>
+        <span id="trial-msg" style="font-size:12px;color:rgba(255,255,255,.6)"></span>
+      </div>
+
+      <div id="trial-out" style="display:none;margin-top:20px"></div>
+
+      <div id="trial-cta" style="display:none;margin-top:20px;background:rgba(0,120,200,.14);border:1px solid rgba(92,200,255,.35);border-radius:10px;padding:20px 22px">
+        <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:6px">無料お試しは以上です。ここから先が本番です。</div>
+        <p style="font-size:13px;color:rgba(255,255,255,.75);line-height:1.85;margin:0 0 14px">
+          実際の導入では、貴法人の勘定科目・補助・部門（事業）コードを読み込ませたうえで、月次の全明細を一括変換し、TKCへの取込ファイル（CSV／SLP・CLS）まで生成します。
+        </p>
+        <a href="https://surc.online/" target="_blank" rel="noopener" style="display:inline-block;background:#fff;color:#0f1720;padding:12px 26px;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none">導入を相談する →</a>
+      </div>
+
+      <p style="margin-top:16px;font-size:11px;color:rgba(255,255,255,.45);line-height:1.8">
+        ※ お試しはClaude（Anthropic）のAPIで処理され、入力テキストのみが送信されます。当社では入力内容を保存しません。
+        表示される勘定科目コードは一般的な例示で、実際の導入時は貴法人のマスタに合わせて構築します。回数は1日あたり3回までです。
+      </p>
+    </div>
+  </div>
+</div>
+
 <div class="problem-bg section-full"id="problem">
   <div class="section" style="padding-top:0;padding-bottom:0">
     <p class="s-label">Problem</p>
@@ -1773,7 +2236,7 @@ footer{
         <h2 class="s-title">１次情報を<br>まとめてアップロードする</h2>
         <p style="font-size:15px;color:var(--ink2);line-height:1.9;margin-top:16px">
           銀行やカード会社から届く取引の生データ（１次情報）を、そのままAIが会計の言葉に翻訳し、お使いの会計ソフトへ送り込みます。<br><br>
-          人間がこれまで担っていた「読み取り・分類・入力」という翻訳作業を自動化することで、<strong>データが会計ソフトに正確に入力された状態</strong>を、ほぼ手間なく実現します。
+          人間がこれまで担っていた「読み取り・分類・入力」という翻訳作業を半自動化することで、<strong>あとは人が目視で確認して確定するだけ</strong>という状態まで一気に運びます。判断と承認は、これまでどおり人の手に残します。
         </p>
         <div style="margin-top:24px;display:flex;flex-direction:column;gap:10px">
           <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink2)">
@@ -1782,7 +2245,7 @@ footer{
           </div>
           <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink2)">
             <span style="width:28px;height:28px;background:var(--cyan-bg);border:1px solid rgba(0,120,200,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--cyan);flex-shrink:0">✓</span>
-            AIが自動で仕訳・勘定科目に変換
+            AIが仕訳・勘定科目の下書きを作成
           </div>
           <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink2)">
             <span style="width:28px;height:28px;background:var(--green-bg);border:1px solid rgba(26,96,64,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--green);flex-shrink:0">→</span>
@@ -1830,13 +2293,13 @@ footer{
 <div id="features">
   <div class="section reveal">
     <p class="s-label">Features</p>
-    <h2 class="s-title">3つの自動化機能</h2>
-    <p class="s-desc">月次経理の主要な作業を自動化。ブラウザだけで動作し、インストール不要です。</p>
+    <h2 class="s-title">3つの半自動化機能</h2>
+    <p class="s-desc">月次経理の主要な作業を半自動化。いずれもAIの出力は下書きで、確定前に必ず人が確認します。ブラウザだけで動作し、インストール不要です。</p>
     <div class="features-grid">
       <div class="feature-card">
         <div class="feature-num">01</div>
         <div class="feature-icon">🏦</div>
-        <h3 class="feature-title">銀行明細 → 仕訳自動変換</h3>
+        <h3 class="feature-title">銀行明細 → 仕訳の下書き生成</h3>
         <p class="feature-text">銀行CSVをドラッグ＆ドロップするだけ。取引先名からルールベースで自動判定し、売掛金・未払費用・給与振込などを即座に仕訳します。API不要・完全無料で動作します。</p>
         <span class="feature-tag free">無料・API不要</span>
       </div>
@@ -1850,8 +2313,8 @@ footer{
       <div class="feature-card">
         <div class="feature-num">03</div>
         <div class="feature-icon">📅</div>
-        <h3 class="feature-title">月末定型仕訳 自動生成</h3>
-        <p class="feature-text">給与手当・減価償却費・地代家賃・通勤費・法定福利費など52件の定型仕訳を毎月自動生成。金額・課税区分・事業CDも個別に変更・保存できます。</p>
+        <h3 class="feature-title">月末定型仕訳 まとめて生成</h3>
+        <p class="feature-text">給与手当・減価償却費・地代家賃・通勤費・法定福利費など52件の定型仕訳を毎月まとめて生成。金額・課税区分・事業CDは1件ずつ確認・変更でき、確定した内容だけを出力します。</p>
         <span class="feature-tag free">無料・API不要</span>
       </div>
     </div>
@@ -1874,13 +2337,13 @@ footer{
         <div class="step-num">02</div>
         <h3 class="step-title">仕訳を確認・修正</h3>
         <p class="step-text">自動判定された仕訳を一覧で確認。勘定科目・事業CD・摘要を1クリックで変更</p>
-        <p class="step-sub">AIが90%以上を自動判定</p>
+        <p class="step-sub">AIの判定は下書き。確定は人が行います</p>
       </div>
       <div class="step">
         <div class="step-num">03</div>
         <h3 class="step-title">CSVを出力 → 会計ソフトへ</h3>
         <p class="step-text">「全仕訳CSV出力」ボタンで各会計ソフト形式のCSVを生成。そのままインポート可能</p>
-        <p class="step-sub">TKC 29カラム完全対応</p>
+        <p class="step-sub">TKCの仕訳読込テンプレートに対応</p>
       </div>
     </div>
   </div>
@@ -1893,9 +2356,9 @@ footer{
     <div class="spec-grid">
       <div class="spec-card">
         <div class="spec-card-title">対応銀行・口座</div>
-        <div class="spec-row"><span class="spec-key">三菱UFJ（総務）</span><span class="spec-val ok">✓</span></div>
-        <div class="spec-row"><span class="spec-key">三菱UFJ（拠点口座）</span><span class="spec-val ok">✓ 4拠点</span></div>
-        <div class="spec-row"><span class="spec-key">三菱UFJ（物流）</span><span class="spec-val ok">✓</span></div>
+        <div class="spec-row"><span class="spec-key">三菱UFJ（本部口座）</span><span class="spec-val ok">✓</span></div>
+        <div class="spec-row"><span class="spec-key">三菱UFJ（拠点口座）</span><span class="spec-val ok">✓ 複数対応</span></div>
+        <div class="spec-row"><span class="spec-key">補助科目（口座別）</span><span class="spec-val ok">✓ 対応</span></div>
         <div class="spec-row"><span class="spec-key">ゆうちょ銀行</span><span class="spec-val ok">✓</span></div>
         <div class="spec-row"><span class="spec-key">最大同時読込</span><span class="spec-val">6口座</span></div>
       </div>
@@ -1909,11 +2372,21 @@ footer{
       </div>
       <div class="spec-card">
         <div class="spec-card-title">CSV出力仕様（TKC）</div>
-        <div class="spec-row"><span class="spec-key">カラム数</span><span class="spec-val">29列</span></div>
+        <div class="spec-row"><span class="spec-key">カラム数</span><span class="spec-val">29列（テンプレート調整可）</span></div>
         <div class="spec-row"><span class="spec-key">日付形式</span><span class="spec-val">令和 (YMMDD)</span></div>
         <div class="spec-row"><span class="spec-key">実際の仕入年月日</span><span class="spec-val ok">✓ 対応</span></div>
         <div class="spec-row"><span class="spec-key">文字コード</span><span class="spec-val">UTF-8 (BOM)</span></div>
         <div class="spec-row"><span class="spec-key">TKCインポート</span><span class="spec-val ok">✓ 直接可能</span></div>
+      </div>
+      <div class="spec-card">
+        <div class="spec-card-title">SLP出力仕様（TKC 他社システム自動仕訳）</div>
+        <div class="spec-row"><span class="spec-key">カラム数</span><span class="spec-val">47列（タブ区切り）*</span></div>
+        <div class="spec-row"><span class="spec-key">文字コード / 改行</span><span class="spec-val">cp932 / CRLF</span></div>
+        <div class="spec-row"><span class="spec-key">ファイル</span><span class="spec-val">.slp ＋ .cls → zip</span></div>
+        <div class="spec-row"><span class="spec-key">部門コード・部門数</span><span class="spec-val ok">✓ 対応</span></div>
+        <div class="spec-row"><span class="spec-key">課税区分52/53/62/63/72/73</span><span class="spec-val ok">✓ CLS自動生成</span></div>
+        <div class="spec-row"><span class="spec-key">適格請求書登録番号</span><span class="spec-val ok">✓ T＋13桁</span></div>
+        <div class="spec-row"><span class="spec-key">提供形態</span><span class="spec-val">個別構築</span></div>
       </div>
       <div class="spec-card">
         <div class="spec-card-title">動作環境</div>
@@ -1924,7 +2397,7 @@ footer{
         <div class="spec-row"><span class="spec-key">オフライン</span><span class="spec-val">一部可能</span></div>
       </div>
     </div>
-    <p style="font-size:11px;color:var(--ink3);margin-top:12px">* カード明細のAI読取時のみ、Anthropic APIへ画像データが送信されます。</p>
+    <p style="font-size:11px;color:var(--ink3);margin-top:12px">* カード明細のAI読取時のみ、Anthropic APIへ画像データが送信されます。SLPの列数・必須項目・課税区分の扱いは、ご利用のTKC製品（FX2クラウド／FX4クラウド／FX2NPO法人会計クラウド等）とバージョン、貴法人のマスタ設定により異なります。導入時に実機で検証したうえで構築します。</p>
   </div>
 </div>
 
@@ -1939,9 +2412,9 @@ footer{
         <div class="cost-amount free">¥0</div>
         <div class="cost-note">完全無料 / APIキー不要</div>
         <div class="cost-list">
-          <div class="cost-list-item">月末定型仕訳 52件 自動生成</div>
+          <div class="cost-list-item">月末定型仕訳 52件 まとめて生成</div>
           <div class="cost-list-item">銀行CSV → 仕訳変換（6口座）</div>
-          <div class="cost-list-item">TKC 29カラムCSV出力</div>
+          <div class="cost-list-item">TKC 29列CSV出力</div>
           <div class="cost-list-item">ブラウザのみで動作</div>
         </div>
       </div>
@@ -1951,7 +2424,7 @@ footer{
         <div class="cost-note">1回あたりの目安（月1回利用で年間約60円）</div>
         <div class="cost-list">
           <div class="cost-list-item">Anthropic APIキーが必要</div>
-          <div class="cost-list-item">画像・PDF → 自動仕訳</div>
+          <div class="cost-list-item">画像・PDF → 仕訳の下書き</div>
           <div class="cost-list-item">初回登録で$5クレジット付与</div>
           <div class="cost-list-item">APIキーは自社管理（安全）</div>
         </div>
@@ -2044,7 +2517,7 @@ footer{
       <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:28px">
         <div style="width:44px;height:44px;border-radius:10px;background:#e8f2ff;border:1px solid rgba(0,120,200,.15);display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:16px">📊</div>
         <h3 style="font-size:15px;font-weight:700;margin-bottom:10px;color:#1a1a1a">効果測定・改善提案</h3>
-        <p style="font-size:13px;color:#777;line-height:1.8">導入前後の工数を数値で比較。「どこでまだ時間がかかっているか」を定期的に分析し、さらなる自動化ポイントを提案します。</p>
+        <p style="font-size:13px;color:#777;line-height:1.8">導入前後の工数を数値で比較。「どこでまだ時間がかかっているか」を定期的に分析し、さらに手作業を減らせる箇所を提案します。</p>
       </div>
       <div style="background:#fff;border:1px solid #e2dfd8;border-radius:12px;padding:28px">
         <div style="width:44px;height:44px;border-radius:10px;background:#e8f2ff;border:1px solid rgba(0,120,200,.15);display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:16px">👩‍💼</div>
@@ -2067,11 +2540,53 @@ footer{
   </div>
 </div>
 
+
+<!-- DEPLOYMENT -->
+<div class="section-full" id="deploy" style="background:#fff;border-top:1px solid rgba(0,0,0,.07)">
+  <div class="section reveal" style="padding-top:0;padding-bottom:0">
+    <p class="s-label">Deployment</p>
+    <h2 class="s-title">ブラウザでも、インストール型でも。</h2>
+    <p class="s-desc" style="max-width:720px">
+      まずはブラウザ版でお試しいただき、ご契約後は<strong>Windows／macOS にインストールして使えるアプリ形式</strong>でのご提供にも対応します。
+      社内規程でブラウザからの外部送信が難しい場合や、共有PCで毎回APIキーを入れ直したくない場合に向いています。
+    </p>
+
+    <div class="slp-g3" style="margin-top:40px">
+      <div style="background:#fff;border:2px solid rgba(0,120,200,.3);border-radius:12px;padding:26px;position:relative">
+        <div style="position:absolute;top:14px;right:14px;background:#0078c8;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px">今すぐ使える</div>
+        <div style="font-size:22px;margin-bottom:10px">🌐</div>
+        <h3 style="font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:8px">ブラウザ版</h3>
+        <p style="font-size:12.5px;color:#666;line-height:1.85">インストール不要。Chrome／Edgeで開くだけ。データはブラウザ内に保持され、AI読取のときだけ画像がAnthropic APIへ送られます。</p>
+      </div>
+      <div style="background:#f8f7f4;border:1px solid #e2dfd8;border-radius:12px;padding:26px;position:relative">
+        <div style="position:absolute;top:14px;right:14px;background:#f0ede8;color:#888;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px">契約後に個別提供</div>
+        <div style="font-size:22px;margin-bottom:10px">💻</div>
+        <h3 style="font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:8px">デスクトップアプリ版（Windows / macOS）</h3>
+        <p style="font-size:12.5px;color:#666;line-height:1.85">同じ機能をインストーラ形式（Windows: .msi ／ macOS: .dmg）でお届けします。APIキーはOSの資格情報ストアに保管し、貴法人の勘定科目・部門マスタを組み込んだ状態で配布できます。署名・配布方法はご契約時にご相談ください。</p>
+      </div>
+      <div style="background:#f8f7f4;border:1px solid #e2dfd8;border-radius:12px;padding:26px;position:relative">
+        <div style="position:absolute;top:14px;right:14px;background:#f0ede8;color:#888;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px">個別構築</div>
+        <div style="font-size:22px;margin-bottom:10px">🧾</div>
+        <h3 style="font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:8px">SLP生成パイプライン</h3>
+        <p style="font-size:12.5px;color:#666;line-height:1.85">TKCの他社システム自動仕訳（SLP／CLS）まで自動生成する月次パイプライン。提出ゲートと取込後の突合まで含めて構築・運用を支援します。</p>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;background:#fff;border:1px solid rgba(0,120,200,.18);border-radius:10px;padding:20px 24px;display:flex;align-items:flex-start;gap:14px">
+      <span style="font-size:22px;flex-shrink:0;margin-top:2px">🤖</span>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:4px">AIモデルは用途に応じて選べます</div>
+        <p style="font-size:13px;color:#666;line-height:1.85;margin:0">写真・PDFの読取が必要なときは画像対応モデル、銀行CSVや定型仕訳だけを扱うときはより安価なモデル——と、処理内容に合わせて切り替えられます。ツール内の「API設定」で、1枚あたりの料金の目安を見ながらその場で変更できます。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="cta-bg section-full" id="contact">
   <div class="section reveal" style="padding-top:0;padding-bottom:0">
     <div class="cta-box">
-      <h2 class="cta-title">月次経理の自動化を<br>はじめてみませんか？</h2>
-      <p class="cta-desc">TKCをご利用中の法人・NPO・社会福祉法人に対応。<br>お客様の勘定科目・事業CDに合わせてカスタマイズします。</p>
+      <h2 class="cta-title">月次経理の半自動化を<br>はじめてみませんか？</h2>
+      <p class="cta-desc">TKCをご利用中の法人・NPO・社会福祉法人に対応。<br>仕訳読込テンプレート用CSVはもちろん、他社システム自動仕訳（SLP／CLS）の生成まで、<br>お客様の勘定科目・補助・部門（事業）コードに合わせて構築します。</p>
       <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
         <a class="btn-primary" href="https://surc.online/" target="_blank" rel="noopener">&#9993; 導入を相談する</a>
       </div>
@@ -2095,6 +2610,110 @@ footer{
 </footer>
 
 <script>
+/* ── 無料お試し（3回まで） ── */
+(function(){
+  var LIMIT = 3, KEY = 'tkc_trial_used_v1';
+  var inEl  = document.getElementById('trial-in');
+  var goEl  = document.getElementById('trial-go');
+  var msgEl = document.getElementById('trial-msg');
+  var outEl = document.getElementById('trial-out');
+  var ctaEl = document.getElementById('trial-cta');
+  var leftEl= document.getElementById('trial-left');
+  if(!inEl || !goEl) return;
+
+  function used(){
+    try{
+      var v = JSON.parse(localStorage.getItem(KEY) || 'null');
+      var today = new Date().toISOString().slice(0,10);
+      if(!v || v.d !== today) return 0;
+      return v.n || 0;
+    }catch(e){ return 0; }
+  }
+  function bump(){
+    try{
+      localStorage.setItem(KEY, JSON.stringify({d:new Date().toISOString().slice(0,10), n:used()+1}));
+    }catch(e){}
+  }
+  function paint(){
+    var left = Math.max(0, LIMIT - used());
+    if(leftEl) leftEl.textContent = left;
+    if(left <= 0){
+      goEl.disabled = true;
+      goEl.textContent = '本日の無料お試しは終了しました';
+      if(ctaEl) ctaEl.style.display = 'block';
+    }
+  }
+  function esc(t){
+    return String(t == null ? '' : t).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function yen(n){
+    var v = Number(n);
+    return isFinite(v) ? '\u00a5' + v.toLocaleString('ja-JP') : esc(n);
+  }
+  function render(r){
+    var rows = (r.entries || []).map(function(e){
+      return '<tr>'
+        + '<td style="white-space:nowrap">' + esc(e.date || '—') + '</td>'
+        + '<td><strong>' + esc(e.drCd || '') + '</strong> ' + esc(e.drName || '') + '</td>'
+        + '<td><strong>' + esc(e.crCd || '') + '</strong> ' + esc(e.crName || '') + '</td>'
+        + '<td class="trial-num">' + yen(e.amount) + '</td>'
+        + '<td class="trial-num">' + esc(e.taxRate === 0 || e.taxRate ? e.taxRate + '%' : '—') + '</td>'
+        + '<td>' + esc(e.memo || '') + '</td>'
+        + '<td>' + (e.needsCheck
+            ? '<span class="trial-chk">★要確認</span>' + (e.note ? '<div style="font-size:11px;color:rgba(255,255,255,.55);margin-top:5px;line-height:1.6">' + esc(e.note) + '</div>' : '')
+            : '<span class="trial-ok">確定</span>') + '</td>'
+        + '</tr>';
+    }).join('');
+    outEl.innerHTML =
+      '<div class="trial-scroll"><table class="trial-tbl">'
+      + '<thead><tr><th>日付</th><th>借方</th><th>貸方</th><th>金額</th><th>税率</th><th>元帳摘要</th><th>判定</th></tr></thead>'
+      + '<tbody>' + rows + '</tbody></table></div>'
+      + (r.summary ? '<p style="font-size:12.5px;color:rgba(255,255,255,.7);line-height:1.85;margin-top:12px">' + esc(r.summary) + '</p>' : '')
+      + '<p style="font-size:11.5px;color:rgba(255,255,255,.5);line-height:1.8;margin-top:10px">'
+      + '★要確認は、入力だけでは確定できない項目です。実際の運用では、この★が1件でも残っているとTKCへの提出を止める仕組みにしています。</p>';
+    outEl.style.display = 'block';
+  }
+
+  (document.querySelectorAll('.trial-sample') || []).forEach(function(b){
+    b.addEventListener('click', function(){ inEl.value = b.getAttribute('data-s'); inEl.focus(); });
+  });
+
+  goEl.addEventListener('click', async function(){
+    var text = (inEl.value || '').trim();
+    if(!text){ msgEl.textContent = '明細のテキストを入力してください。'; return; }
+    if(used() >= LIMIT){ paint(); return; }
+    goEl.disabled = true;
+    msgEl.textContent = 'AIが仕訳を組み立てています…';
+    outEl.style.display = 'none';
+    try{
+      var res = await fetch('/api/demo-shiwake', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ text: text.slice(0,600) })
+      });
+      var data = await res.json();
+      if(data.error){
+        msgEl.textContent = data.error;
+        if(data.limitReached){ bump(); paint(); }
+        goEl.disabled = used() >= LIMIT;
+        return;
+      }
+      bump();
+      render(data.result);
+      msgEl.textContent = '';
+      paint();
+      if(used() >= LIMIT && ctaEl) ctaEl.style.display = 'block';
+      goEl.disabled = used() >= LIMIT;
+    }catch(e){
+      msgEl.textContent = '通信エラーが発生しました。時間をおいてお試しください。';
+      goEl.disabled = false;
+    }
+  });
+
+  paint();
+})();
+
 const observer = new IntersectionObserver(entries => {
   entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
 }, {threshold:0.1});

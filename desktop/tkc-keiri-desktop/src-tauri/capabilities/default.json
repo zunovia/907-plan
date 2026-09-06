@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "画面表示に必要な最小権限のみ。更新確認とダイアログはRust側で実行する。",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
