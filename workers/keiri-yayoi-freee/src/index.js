@@ -481,7 +481,7 @@ var CAT_B = {給与:'var(--gnbg)',減価償却:'var(--blbg)',地代家賃:'var(-
   fixedRows = DEFAULT_MASTER.map(function(d){ return Object.assign({},d); });
   renderFixed();
   updateTop();
-  var k = localStorage.getItem('tkc_api_key');
+  var k = lsGet('tkc_api_key');
   if(k){
     var e1 = document.getElementById('cc-key'); if(e1) e1.value = k;
     var e2 = document.getElementById('g-key');  if(e2) e2.value = k;
@@ -532,6 +532,11 @@ function r2AD(n){ if(!n) return ''; var y=Math.floor(n/10000)+2018,m=Math.floor(
 function fmtD(d){ return String(d||'').replace(/[\\.\\-]/g,'/'); }
 function toISO(n){ if(!n) return ''; if(typeof n==='number') return r2AD(n).replace(/\\//g,'-'); return String(n).replace(/\\//g,'-'); }
 function cTax(a,t){ if(!t) return {ta:0,ex:a}; var e=Math.round(a/(1+t)); return {ta:a-e, ex:e}; }
+// localStorage は file:// やサイトデータ拒否の環境で throw することがある。
+// 落ちても画面が動き続けるように、必ずこの3つを通す。
+function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,v); return true; }catch(e){ return false; } }
+function lsDel(k){ try{ localStorage.removeItem(k); }catch(e){} }
 function ce(v){ var s=String(v==null?'':v); return s.indexOf(',')>=0?'"'+s+'"':s; }
 function cl(s,n){ s=String(s||''); return s.length>n?s.slice(0,n)+'…':s; }
 function escH(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
@@ -791,7 +796,7 @@ function ccFiles(files){
       }
       done++;
       if(done===arr.length){
-        var k=(document.getElementById('cc-key')||{}).value||localStorage.getItem('tkc_api_key')||'';
+        var k=(document.getElementById('cc-key')||{}).value||lsGet('tkc_api_key')||'';
         if(k) ccAPI(k); else notif('APIキーを設定してください');
       }
     };
@@ -1390,22 +1395,22 @@ function resetAll(){
 // APIキー
 // =============================================
 function saveKey(val){
-  if(val&&val.indexOf('sk-ant')===0){localStorage.setItem('tkc_api_key',val);var e=document.getElementById('cc-kst');if(e)e.textContent='✓ 保存済み';}
-  else if(!val){localStorage.removeItem('tkc_api_key');var e2=document.getElementById('cc-kst');if(e2)e2.textContent='';}
+  if(val&&val.indexOf('sk-ant')===0){var ok=lsSet('tkc_api_key',val);var e=document.getElementById('cc-kst');if(e)e.textContent=ok?'✓ 保存済み':'このブラウザでは保存できません（今回のみ有効）';}
+  else if(!val){lsDel('tkc_api_key');var e2=document.getElementById('cc-kst');if(e2)e2.textContent='';}
 }
 function gSave(){
   var val=((document.getElementById('g-key')||{}).value||'').trim();
   var st=document.getElementById('g-st');
   if(!val){if(st){st.style.display='block';st.style.background='#fef3c7';st.style.color='#92400e';st.textContent='⚠ APIキーを入力してください';}return;}
   if(val.indexOf('sk-ant')<0){if(st){st.style.display='block';st.style.background='#fce4ec';st.style.color='#880e4f';st.textContent='⚠ sk-ant- から始まるキーを入力してください';}return;}
-  localStorage.setItem('tkc_api_key',val);
+  if(!lsSet('tkc_api_key',val)){ notif('このブラウザではキーを保存できません。今回のみ有効です','orange'); }
   var ck=document.getElementById('cc-key');if(ck)ck.value=val;
   var kst=document.getElementById('cc-kst');if(kst)kst.textContent='✓ 保存済み';
   if(st){st.style.display='block';st.style.background='#d8f3dc';st.style.color='#1a6040';st.textContent='✅ 保存しました！';}
   notif('✓ APIキーを保存しました','green');
 }
 function gClear(){
-  localStorage.removeItem('tkc_api_key');
+  lsDel('tkc_api_key');
   var gel=document.getElementById('g-key');if(gel)gel.value='';
   var ck=document.getElementById('cc-key');if(ck)ck.value='';
   var kst=document.getElementById('cc-kst');if(kst)kst.textContent='';
