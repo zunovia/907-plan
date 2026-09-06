@@ -331,9 +331,9 @@ input:focus,select:focus{border-color:#999}
     <div style="padding:14px">
       <div class="swcards">
         <div class="swcard act" id="swc-tkc"><div style="font-size:15px;font-weight:700;color:var(--cy);margin-bottom:3px">TKC</div><div style="font-size:10px;color:#888;margin-bottom:6px">29列CSV / SLP</div><span class="chip cg">✓ 対応済み</span></div>
-        <div class="swcard" id="swc-yayoi"><div style="font-size:15px;font-weight:700;color:#e85a10;margin-bottom:3px">弥生</div><div style="font-size:10px;color:#888;margin-bottom:6px">弥生インポート形式</div><span class="chip" style="background:#eee;color:#888;font-size:9px">5月公開予定</span></div>
+        <div class="swcard" id="swc-yayoi"><div style="font-size:15px;font-weight:700;color:#e85a10;margin-bottom:3px">弥生</div><div style="font-size:10px;color:#888;margin-bottom:6px">弥生インポート形式</div><span class="chip" style="background:#eee;color:#888;font-size:9px">個別対応</span></div>
         <div class="swcard" id="swc-freee"><div style="font-size:15px;font-weight:700;color:#00b894;margin-bottom:3px">freee</div><div style="font-size:10px;color:#888;margin-bottom:6px">取引インポート18列</div><span class="chip cg">✓ 対応済み</span></div>
-        <div class="swcard" id="swc-mf"><div style="font-size:15px;font-weight:700;color:#0066cc;margin-bottom:3px">MF</div><div style="font-size:10px;color:#888;margin-bottom:6px">仕訳インポート形式</div><span class="chip" style="background:#eee;color:#888;font-size:9px">5月公開予定</span></div>
+        <div class="swcard" id="swc-mf"><div style="font-size:15px;font-weight:700;color:#0066cc;margin-bottom:3px">MF</div><div style="font-size:10px;color:#888;margin-bottom:6px">仕訳インポート形式</div><span class="chip" style="background:#eee;color:#888;font-size:9px">個別対応</span></div>
       </div>
     </div>
   </div>
@@ -670,7 +670,7 @@ function goSec(id, btn){
 // ソフト切替
 // =============================================
 function switchSW(sw){
-  if(sw==='yayoi'||sw==='mf'){notif('⏳ '+({yayoi:'弥生会計',mf:'マネーフォワード'}[sw])+' は近日公開予定です','orange');return;}
+  if(sw==='yayoi'||sw==='mf'){notif('弥生会計・マネーフォワードは個別対応でのご提供です。ご相談ください','orange');return;}
   SW = sw;
   ['tkc','yayoi','freee','mf'].forEach(function(s){
     var b = document.getElementById('swb-' + s);
@@ -1225,7 +1225,7 @@ function dlFile(blob,fname){
   a.download=fname; a.style.display='none'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
 }
 function downloadAll(fmt){
-  if(SW==='yayoi'||SW==='mf'){notif('⏳ '+({yayoi:'弥生会計',mf:'マネーフォワード'}[SW])+' は近日公開予定です','orange');return;}
+  if(SW==='yayoi'||SW==='mf'){notif('弥生会計・マネーフォワードは個別対応でのご提供です。ご相談ください','orange');return;}
   var ym=getYM(),ymS=String(ym.y)+String(ym.m).padStart(2,'0');
   var rows,cols,fbase,akey;
   if(SW==='yayoi')      {rows=buildYayoi();cols=YY_C;fbase='仕訳_弥生_'+ymS;akey='借方金額';}
@@ -1891,7 +1891,7 @@ footer{
   <p class="hero-sub-title">AI 仕訳インポートツール ── 最後の確認は、人が行います</p>
   <p class="hero-desc">
     銀行明細・クレジットカード・月末定型仕訳を、AIが下書きします。<br>
-    TKC・freee会計に対応したインポートCSVをワンクリックで生成します。弥生会計・マネーフォワード対応版も開発中。<br>
+    TKC・freee会計に対応したインポートCSVをワンクリックで生成します。弥生会計・マネーフォワードは個別対応でご提供します。<br>
     <span style="color:var(--cyan);font-weight:600">さらに、TKC FXクラウドシリーズの「他社システム自動仕訳の読込」用 SLP／CLS ファイル（タブ区切り・cp932・zip）の生成まで、実際の月次決算業務で運用しています。</span>
   </p>
   <div class="hero-btns">
@@ -1970,8 +1970,8 @@ footer{
 <div style="background:#fff;border-top:1px solid rgba(0,0,0,.07);border-bottom:1px solid rgba(0,0,0,.07)">
   <div class="section reveal" style="padding-top:72px;padding-bottom:72px">
     <p class="s-label">Supported Software</p>
-    <h2 class="s-title">TKCとfreee会計に対応。<br>弥生・マネーフォワードも開発中。</h2>
-    <p class="s-desc" style="max-width:700px">本ツールはTKCの仕訳インポート形式に加え、freee会計の取引インポート形式（18列CSV）にも対応しています。弥生会計・マネーフォワードクラウドについても順次対応予定です。</p>
+    <h2 class="s-title">TKCとfreee会計に対応。<br>弥生・マネーフォワードは個別対応です。</h2>
+    <p class="s-desc" style="max-width:700px">本ツールはTKCの仕訳インポート形式に加え、freee会計の取引インポート形式（18列CSV）にも対応しています。弥生会計・マネーフォワードクラウドは、貴法人の勘定科目とインポート形式に合わせた個別構築でのご提供となります。まずはご相談ください。</p>
 
     <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:40px">
 
@@ -2040,7 +2040,7 @@ footer{
     <div style="margin-top:20px;background:#fff;border:1px solid rgba(0,120,200,.18);border-radius:10px;padding:20px 24px;display:flex;align-items:flex-start;gap:14px">
       <span style="font-size:22px;flex-shrink:0;margin-top:2px">🤖</span>
       <div>
-        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:4px">主要な会計ソフトに順次対応中</div>
+        <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:4px">弥生・マネーフォワードは個別対応でご提供します</div>
         <p style="font-size:13px;color:#666;line-height:1.8;margin:0">これらの会計ソフトはセキュリティ上の理由から外部AIとの直接連携が制限されています。本ツールはAIが生成した仕訳を各ソフト専用のCSVに変換してインポートする方式で、この制約を解決します。TKC・freee会計は対応済みです。弥生・マネーフォワードをお使いの場合は、貴社のソフト仕様・勘定科目・インポート形式をヒアリングしたうえで、担当コンサルタントとAIが専用ツールを開発・納品します。<a href="https://surc.online/" target="_blank" rel="noopener" style="color:#0078c8;font-weight:600;margin-left:4px">まずはご相談ください →</a></p>
       </div>
     </div>
@@ -2307,7 +2307,7 @@ footer{
             </div>
             <div style="background:var(--cyan);border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:12px">
               <span style="font-size:20px">⬇</span>
-              <div><div style="font-size:12px;font-weight:700;color:#fff">会計ソフトへCSVアップロード</div><div style="font-size:11px;color:rgba(255,255,255,.7)">TKC・freee に対応（弥生・MF 開発中）</div></div>
+              <div><div style="font-size:12px;font-weight:700;color:#fff">会計ソフトへCSVアップロード</div><div style="font-size:11px;color:rgba(255,255,255,.7)">TKC・freee に対応（弥生・MF は個別対応）</div></div>
             </div>
           </div>
         </div>
@@ -2495,7 +2495,7 @@ footer{
   <h2 style="font-family:'Noto Serif JP',serif;font-size:clamp(22px,3vw,36px);font-weight:700;color:#fff;margin-bottom:12px;letter-spacing:-.01em">今すぐ無料で試してみる</h2>
   <p style="font-size:14px;color:rgba(255,255,255,.8);margin-bottom:28px;line-height:1.8;max-width:560px;margin-left:auto;margin-right:auto">
     TKC・freee会計対応版を無料公開中。インストール不要・ブラウザだけで動作します。<br>
-    弥生会計・マネーフォワード対応版は順次リリース予定です。
+    弥生会計・マネーフォワードは個別対応でのご提供です。まずはご相談ください。
   </p>
   <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:20px">
     <a href="https://keiri-yayoi-freee.kaneda-ryota.workers.dev/tool.html" target="_blank" style="background:#fff;color:var(--cyan);padding:14px 36px;border-radius:8px;font-size:15px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:8px;transition:all .2s" onmouseover="this.style.background='#f0f8ff'" onmouseout="this.style.background='#fff'">
@@ -2505,7 +2505,7 @@ footer{
   <div style="display:flex;gap:20px;justify-content:center;flex-wrap:wrap">
     <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.75)">
       <span style="font-size:16px">弥生</span>
-      <span style="font-size:10px;background:rgba(255,255,255,.2);padding:2px 8px;border-radius:20px">実装予定</span>
+      <span style="font-size:10px;background:rgba(255,255,255,.2);padding:2px 8px;border-radius:20px">個別対応</span>
     </div>
     <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.75)">
       <span style="font-size:16px">freee</span>
@@ -2513,7 +2513,7 @@ footer{
     </div>
     <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.75)">
       <span style="font-size:16px">MF</span>
-      <span style="font-size:10px;background:rgba(255,255,255,.2);padding:2px 8px;border-radius:20px">実装予定</span>
+      <span style="font-size:10px;background:rgba(255,255,255,.2);padding:2px 8px;border-radius:20px">個別対応</span>
     </div>
   </div>
 </div>
@@ -2748,7 +2748,11 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 </body>
 </html>`;
     return new Response(html, {
-      headers: { 'Content-Type': 'text/html;charset=UTF-8' },
+      // Cache-Controlが無いとデプロイ後もエッジの古いHTMLが配信される
+      headers: {
+        'Content-Type': 'text/html;charset=UTF-8',
+        'Cache-Control': 'no-cache',
+      },
     });
   },
 };
