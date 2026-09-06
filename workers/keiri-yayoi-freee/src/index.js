@@ -1,3 +1,6 @@
+// 配布版バナーに出す最終更新日。ツールを改修したらここを更新する
+const TOOL_UPDATED = '2026/09/06';
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
@@ -45,7 +48,8 @@ export default {
       });
     }
 
-    if (url.pathname === "/tool.html" || url.pathname === "/tool") {
+    if (url.pathname === "/tool.html" || url.pathname === "/tool"
+        || url.pathname === "/tool-standalone.html") {
       const toolHtml = `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -247,6 +251,28 @@ tr.hl td,.jr.hl{background:#fff4d6 !important;box-shadow:inset 3px 0 0 var(--am)
       <div style="display:flex;gap:10px;align-items:flex-start"><div style="width:22px;height:22px;border-radius:50%;background:var(--cy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">1</div><div><div style="font-size:12px;font-weight:700">上のボタンで会計ソフトを選択</div><div style="font-size:11px;color:var(--ink3)">TKC・弥生・freee・MF から選ぶと出力CSVが切り替わります</div></div></div>
       <div style="display:flex;gap:10px;align-items:flex-start"><div style="width:22px;height:22px;border-radius:50%;background:var(--cy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">2</div><div><div style="font-size:12px;font-weight:700">左メニューからデータを入力</div><div style="font-size:11px;color:var(--ink3)">月末定型仕訳・銀行明細・カード明細を入力</div></div></div>
       <div style="display:flex;gap:10px;align-items:flex-start"><div style="width:22px;height:22px;border-radius:50%;background:var(--gn);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">3</div><div><div style="font-size:12px;font-weight:700">「⬇ CSV出力」→ 会計ソフトにインポート</div><div style="font-size:11px;color:var(--ink3)">データが会計ソフトに正確に入力されます</div></div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="cardh"><span class="cardt">このツールをファイルで渡す</span><span class="chip cb">随時更新中</span></div>
+    <div style="padding:14px">
+      <div style="font-size:12px;line-height:1.85;color:var(--ink2);margin-bottom:12px">
+        HTML 1ファイルとしてダウンロードできます。インストール不要で、ダブルクリックすればブラウザで開きます。
+        メール添付・USB・共有フォルダのどれでも渡せます。<br>
+        銀行CSVの仕訳化・月末定型仕訳・CSV／Excel出力・提出前チェックは<strong>通信なし</strong>で動きます。
+        カード明細のAI読取だけは通信とAPIキーが必要です。
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <a class="btn btn-g" href="/tool-standalone.html" download>⬇ 単体HTMLをダウンロード</a>
+        <span style="font-size:11px;color:var(--ink3);line-height:1.7">
+          対応: <strong style="color:var(--ink2)">TKC・freee</strong>（弥生・マネーフォワードは個別対応）／随時更新中
+        </span>
+      </div>
+      <div style="margin-top:12px;padding-top:10px;border-top:.5px solid var(--bd);font-size:11px;color:#aaa;line-height:1.75">
+        ダウンロードしたファイルは<strong>その時点のコピー</strong>です。更新は反映されないので、
+        常に最新をお使いいただく場合はこのページのURLをお渡しください。
+        なお中身はHTMLなので、勘定科目や判定ルールは開けば読めます。社外へお渡しの際はご留意ください。
+      </div>
     </div>
   </div>
 </div>
@@ -1444,6 +1470,26 @@ function notif(msg,cls){
 </script>
 </body>
 </html>`;
+      if (url.pathname === "/tool-standalone.html") {
+        // 単体で配れるように、唯一の相対参照を絶対URLへ直し、
+        // 受け取った人にも状況が分かるバナーを先頭に足す
+        const dlDate = new Date(Date.now() + 9 * 3600 * 1000)
+          .toISOString().slice(0, 10).replace(/-/g, '/');
+        const banner = `<div style="background:#0f1720;color:#fff;padding:10px 14px;font-size:12px;line-height:1.8;font-family:'Noto Sans JP',sans-serif"><strong>配布版</strong>（1ファイルで動作します）&nbsp;/&nbsp;対応ソフト: <strong>TKC・freee</strong>&nbsp;<span style="opacity:.65">弥生・マネーフォワードは個別対応</span>&nbsp;/&nbsp;<span style="opacity:.65">随時更新中 — 更新 ${TOOL_UPDATED} ／ この版の取得 ${dlDate}</span><br><span style="opacity:.65">最新版: </span><a href="${url.origin}/tool.html" style="color:#7fd3ff">${url.origin}/tool.html</a></div>`;
+        const standalone = toolHtml
+          .replace("fetch('/api/cc-read'", "fetch('" + url.origin + "/api/cc-read'")
+          .replace('<div class="tb">', banner + '<div class="tb">');
+        const fname = 'AI-shiwake-import-tool.html';
+        return new Response(standalone, {
+          headers: {
+            'Content-Type': 'text/html;charset=UTF-8',
+            'Content-Disposition':
+              'attachment; filename="' + fname + '"; ' +
+              "filename*=UTF-8''" + encodeURIComponent('AI仕訳インポートツール_単体版.html'),
+            'Cache-Control': 'no-store',
+          },
+        });
+      }
       return new Response(toolHtml, {
         // ツール本体はデプロイ直後から新しい版を配りたいのでキャッシュしない
         headers: {
