@@ -136,6 +136,44 @@ input:focus,select:focus{border-color:#999}
 .fld{display:flex;flex-direction:column;gap:2px}
 .flbl{font-size:9px;font-weight:700;color:var(--ink3);letter-spacing:.04em;text-transform:uppercase}
 .detg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-bottom:8px}
+
+/* ── 表：見出し固定・横スクロール ───────────────────────── */
+.tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tscroll table{min-width:640px}
+.tscroll thead th{position:sticky;top:0;z-index:2}
+
+/* ── 提出前チェックで指摘された行 ─────────────────────── */
+tr.hl td,.jr.hl{background:#fff4d6 !important;box-shadow:inset 3px 0 0 var(--am)}
+.gate-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:9px}
+.gate-ico{flex-shrink:0;width:17px;text-align:center;font-weight:700;line-height:1.75}
+.gate-msg{font-size:12px;line-height:1.75;flex:1}
+.gate-go{flex-shrink:0;background:var(--sf);border:.5px solid var(--bd2);color:var(--ink2);
+  border-radius:4px;padding:2px 9px;font-size:11px;font-family:inherit;cursor:pointer;white-space:nowrap}
+.gate-go:hover{background:#f5f4f0;border-color:#999}
+
+/* ── 出力ボタンの警告状態 ─────────────────────────────── */
+.tb-dl.warn{background:var(--am)}
+.tb-dl.warn:hover{background:#7a3609}
+.btn-g.warn{background:var(--am)}.btn-g.warn:hover{background:#7a3609}
+
+/* ── 狭い画面 ─────────────────────────────────────────── */
+@media (max-width:900px){
+  .tb{height:auto;flex-wrap:wrap;padding:8px 10px;row-gap:6px;position:static}
+  .tb-sp{flex-basis:100%;height:0}
+  .tb-stat{margin:0 4px}
+  .app{flex-direction:column;height:auto}
+  .sb{width:100%;display:flex;overflow-x:auto;border-right:none;border-bottom:.5px solid var(--bd)}
+  .sbh,.sbdv,.sbtot{display:none}
+  .sbi{border-left:none;border-bottom:2.5px solid transparent;white-space:nowrap;padding:9px 12px}
+  .sbi.on{border-left-color:transparent;border-bottom-color:var(--ink)}
+  .main{padding:12px 12px 60px;overflow:visible}
+  .swcards,.detg{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #out-sums{grid-template-columns:1fr !important}
+}
+@media (max-width:520px){
+  .swcards,.detg{grid-template-columns:1fr}
+  .tb-logo{font-size:12px}
+}
 </style>
 </head>
 <body>
@@ -245,8 +283,8 @@ input:focus,select:focus{border-color:#999}
   <div id="bank-wrap" style="display:none">
     <div class="card">
       <div class="cardh"><span class="cardt">仕訳一覧</span><span style="font-size:10px;color:#aaa;margin-left:5px">黄色行 = 要確認</span></div>
-      <table><thead><tr><th>日付</th><th>口座</th><th>取引先</th><th>借方</th><th></th><th>貸方</th><th class="ar">金額</th><th>摘要</th><th>出力</th></tr></thead>
-      <tbody id="bank-tbody"></tbody></table>
+      <div class="tscroll"><table><thead><tr><th>日付</th><th>口座</th><th>取引先</th><th>借方</th><th></th><th>貸方</th><th class="ar">金額</th><th>摘要</th><th>出力</th></tr></thead>
+      <tbody id="bank-tbody"></tbody></table></div>
     </div>
   </div>
   <div class="empty" id="bank-empty"><div style="font-size:28px;margin-bottom:6px">📂</div><div style="font-weight:600">銀行CSVをドロップしてください</div></div>
@@ -302,10 +340,34 @@ input:focus,select:focus{border-color:#999}
     </div>
   </div>
   <div id="out-sums" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px"></div>
+  <div class="card" style="margin-bottom:12px" id="tax-set">
+    <div class="cardh"><span class="cardt">税務設定</span><span style="font-size:10px;color:#aaa;margin-left:5px">TKC出力に反映されます</span></div>
+    <div style="padding:12px;display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+        <span style="color:var(--ink3)">経理方式</span>
+        <select id="set-taxmode" onchange="setTaxMode(this.value)" style="font-size:12px;padding:4px 6px">
+          <option value="inc">税込経理（消費税欄は空欄）</option>
+          <option value="exc">税抜経理（消費税欄を計算）</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+        <span style="color:var(--ink3)">軽減対象取引区分</span>
+        <input id="set-keigen" value="" placeholder="空欄" onchange="setKeigen(this.value)" style="font-size:12px;padding:4px 6px;width:70px">
+      </label>
+    </div>
+    <div style="padding:0 12px 12px;font-size:11.5px;color:var(--ink3);line-height:1.8">
+      課税区分（0・1・5・8・52）と事業区分、税率の表記（10.0% / 8.0%）はTKCの形式で自動生成します。
+      免税事業者からの課税仕入れは、取引日から経過措置の控除割合（80% / 70% / 50% / 30%）を自動で入れます。
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="cardh"><span class="cardt">提出前チェック</span><span class="chip" id="gate-chip">—</span></div>
+    <div style="padding:12px" id="gate-body"></div>
+  </div>
   <div class="card">
     <div class="cardh"><span class="cardt">全仕訳一覧</span></div>
-    <table><thead><tr><th>区分</th><th>借方</th><th>貸方</th><th>摘要</th><th class="ar">金額</th><th>課税</th></tr></thead>
-    <tbody id="out-tbody"></tbody></table>
+    <div class="tscroll"><table><thead><tr><th>区分</th><th>日付</th><th>借方</th><th>貸方</th><th>摘要</th><th class="ar">金額</th><th>課税区分</th><th>税率</th></tr></thead>
+    <tbody id="out-tbody"></tbody></table></div>
   </div>
 </div>
 
@@ -457,6 +519,7 @@ function switchSW(sw){
   if(lbl) lbl.textContent = '出力形式: ' + (fmt[sw] || sw);
   var nm  = {tkc:'TKC',yayoi:'弥生会計',freee:'freee',mf:'マネーフォワード'};
   notif('✓ ' + (nm[sw]||sw) + ' に切り替えました');
+  renderOutput();
 }
 
 // =============================================
@@ -665,7 +728,8 @@ function renderBank(){
   var el=document.getElementById('sb-b'); if(el) el.textContent=out.length||'';
   document.getElementById('bank-tbody').innerHTML=bankRows.map(function(r){
     var dOk=r.drCd&&r.drCd!=='CHECK', cOk=r.crCd&&r.crCd!=='CHECK';
-    return \`<tr style="\${r.st==='check'?'background:#fffcf4':''}">
+    var hl=HL['bank:'+r.id]?'hl':'';
+    return \`<tr class="\${hl}" style="\${r.st==='check'?'background:#fffcf4':''}">
       <td style="font-family:monospace;font-size:10px;color:#aaa;white-space:nowrap">\${fmtD(r.date)}</td>
       <td><span class="at \${r.ai.tag||'at-s'}">\${r.acct}</span></td>
       <td style="font-size:10px;color:#888;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">\${escH(cl(r.name,15))}</td>
@@ -902,21 +966,148 @@ var YY_C=["伝票No","年月日","借方勘定科目","借方補助科目","借�
 var FR_C=["発生日","借方勘定科目","借方補助科目名","借方部門","借方税区分","借方金額","借方税額","貸方勘定科目","貸方補助科目名","貸方部門","貸方税区分","貸方金額","貸方税額","摘要","管理番号"];
 var MF_C=["取引日","借方勘定科目","借方補助科目","借方税区分","借方金額","貸方勘定科目","貸方補助科目","貸方税区分","貸方金額","摘要","仕訳メモ","タグ","MF仕訳ID"];
 
+// =============================================
+// TKC 税務コード
+//   実際のTKC元帳切り出しデータの表記に合わせている。
+//   税率 : "10.0%" / "8.0%"（小数1桁＋%）。対象外は空欄
+//   課   : 課税区分 0=対象外 / 1=課税売上 / 3=非課税売上
+//          5=課税売上にのみ要する課税仕入れ / 8=非課税・不課税仕入れ
+//          9=課税区分未確定 / 52=免税事業者等からの課税仕入れ（経過措置）
+//   事   : 事業区分。課税売上のとき 2
+//   内、消費税等・税抜き金額 : 税込経理ではTKC側が値を持たないため空欄
+// =============================================
+var TAXMODE = 'inc';   // 'inc'=税込経理（既定） / 'exc'=税抜経理
+var LAST_GATE = null;  // 直近の提出前チェック結果
+var HL = {};           // ハイライト対象 'sec:id' → 1
+var KEIGEN_CD = '';    // 軽減対象取引区分に入れる値（製品仕様により異なるため既定は空）
+
+function tkcRate(t){ return t>0 ? (Math.round(t*1000)/10).toFixed(1)+'%' : ''; }
+function isCost(cd){ var n=parseInt(String(cd),10); return n>=5000&&n<7000; }
+function isRev(cd){ var n=parseInt(String(cd),10); return (n>=4000&&n<5000)||(n>=7000&&n<8000); }
+
+// 免税事業者等からの課税仕入れに係る経過措置の控除割合（％）
+//   〜令和8年9月30日      : 80
+//   令和8年10月1日〜10年9月30日 : 70   ← 令和8年度税制改正で50%から緩和・2年延長
+//   令和10年10月1日〜12年9月30日: 50
+//   令和12年10月1日〜13年9月30日: 30
+//   令和13年10月1日〜      : 0
+// rdate は和暦 YMMDD（例: 令和8年9月30日 = 80930）
+function koujoRitsu(rdate){
+  var d=Number(rdate)||0, y=Math.floor(d/10000), md=d%10000;
+  if(!d) return '';
+  if(y<8  || (y===8 &&md<1001)) return 80;
+  if(y<10 || (y===10&&md<1001)) return 70;
+  if(y<12 || (y===12&&md<1001)) return 50;
+  if(y<13 || (y===13&&md<1001)) return 30;
+  return 0;
+}
+
+// 1行分の税務欄をまとめて決める。o={drCd,crCd,tax,amt,menzei,rdate}
+function taxCols(o){
+  var t=Number(o.tax)||0;
+  var r={rate:tkcRate(t), ka:'0', ji:'', keigen:'', kojo:'', ta:'', ex:''};
+  if(t>0){
+    if(isRev(o.crCd))      { r.ka='1'; r.ji='2'; }          // 課税売上
+    else if(isCost(o.drCd)){ r.ka = o.menzei ? '52' : '5';  // 課税仕入れ
+                             if(o.menzei) r.kojo=koujoRitsu(o.rdate); }
+    else                   { r.ka='9'; }                    // 判定できない
+    if(Math.abs(t-0.08)<1e-9) r.keigen=KEIGEN_CD;           // 軽減税率
+  }else{
+    r.ka = (isCost(o.drCd)||isRev(o.crCd)) ? '8' : '0';     // 不課税/非課税 or 対象外
+  }
+  if(TAXMODE==='exc' && t>0){ var c=cTax(o.amt,t); r.ta=c.ta; r.ex=c.ex; }
+  return r;
+}
+
 function buildTKC(){
-  var ym=getYM(),reiwa=ym.y-2018,ld=lastDay(ym.y,ym.m),date=reiwa*10000+ym.m*100+ld,rows=[],fn=fixedRows.filter(function(r){return r.en&&r.amt>0;});
+  var ym=getYM(),reiwa=ym.y-2018,ld=lastDay(ym.y,ym.m),date=reiwa*10000+ym.m*100+ld;
+  var rows=[],fn=fixedRows.filter(function(r){return r.en&&r.amt>0;});
+  function push(o){
+    var tc=taxCols({drCd:o.drCd,crCd:o.crCd,tax:o.tax,amt:o.amt,menzei:o.menzei,rdate:o.date});
+    rows.push({
+      _src:o.src, _id:o.id,
+      "事業CD":o.ji, "事業名":o.jiN||JI_MAP[o.ji]||'',
+      "年月日":o.date, "伝番":o.den, "証番":'',
+      "課":tc.ka, "事":tc.ji, "小切手NO":'',
+      "借方CD":o.drCd, "借方補助":o.drSub||'', "借方科目名":o.drN||kmN(o.drCd), "借方口座名":'',
+      "貸方CD":o.crCd, "貸方補助":o.crSub||'', "貸方科目名":o.crN||kmN(o.crCd), "貸方口座名":'',
+      "取引金額":o.amt, "税率":tc.rate,
+      "内、消費税等":tc.ta, "税抜き金額":tc.ex,
+      "取引先CD":'', "取引先名（仕入先の氏名又は名称）":o.vendor||'',
+      "実際の仕入れ年月日（期間）":o.jissai||'',
+      "元帳摘要（仕入れ資産等の総称）":o.memo,
+      "ﾌﾟﾛｼﾞｪｸﾄCD":'', "ﾌﾟﾛｼﾞｪｸﾄ名":'',
+      "軽減対象取引区分":tc.keigen, "控除割合":tc.kojo, "事業者登録番号":o.tno||''
+    });
+  }
   fn.forEach(function(r,i){
-    var t=cTax(r.amt,r.tax);
-    rows.push({"事業CD":r.ji,"事業名":JI_MAP[r.ji]||'',"年月日":date,"伝番":String(i+1).padStart(5,' ')+'A',"証番":'',"課":0,"事":'',"小切手NO":'',"借方CD":r.drCd,"借方補助":'',"借方科目名":r.drN||kmN(r.drCd),"借方口座名":'',"貸方CD":r.crCd,"貸方補助":'',"貸方科目名":r.crN||kmN(r.crCd),"貸方口座名":'',"取引金額":r.amt,"税率":r.tax||'',"内、消費税等":r.tax?t.ta:0,"税抜き金額":r.tax?t.ex:r.amt,"取引先CD":0,"取引先名（仕入先の氏名又は名称）":'',"実際の仕入れ年月日（期間）":'',"元帳摘要（仕入れ資産等の総称）":r.memo,"ﾌﾟﾛｼﾞｪｸﾄCD":'',"ﾌﾟﾛｼﾞｪｸﾄ名":'',"軽減対象取引区分":'',"控除割合":'',"事業者登録番号":''});
+    push({src:'fixed',id:r.id,ji:r.ji,date:date,den:String(i+1)+'A',
+          drCd:r.drCd,drN:r.drN,crCd:r.crCd,crN:r.crN,
+          amt:r.amt,tax:r.tax,memo:r.memo,menzei:r.menzei});
   });
-  bankRows.filter(function(r){return r.inc&&r.st!=='skip'&&r.drCd!=='CHECK'&&r.crCd!=='CHECK';}).forEach(function(r,i){
-    var dr=rCd(r.drCd),cr=rCd(r.crCd),tax=r.tax||0,t=cTax(r.amt,tax);
-    rows.push({"事業CD":r.ji,"事業名":JI_MAP[r.ji]||'',"年月日":pD(r.date),"伝番":String(fn.length+i+1).padStart(5,' ')+'B',"証番":'',"課":0,"事":'',"小切手NO":'',"借方CD":dr,"借方補助":'',"借方科目名":kmN(r.drCd),"借方口座名":'',"貸方CD":cr,"貸方補助":'',"貸方科目名":kmN(r.crCd),"貸方口座名":'',"取引金額":r.amt,"税率":tax||'',"内、消費税等":tax?t.ta:0,"税抜き金額":tax?t.ex:r.amt,"取引先CD":0,"取引先名（仕入先の氏名又は名称）":r.name||'',"実際の仕入れ年月日（期間）":'',"元帳摘要（仕入れ資産等の総称）":r.memo,"ﾌﾟﾛｼﾞｪｸﾄCD":'',"ﾌﾟﾛｼﾞｪｸﾄ名":'',"軽減対象取引区分":'',"控除割合":'',"事業者登録番号":''});
+  bankRows.filter(function(r){return r.inc&&r.st!=='skip'&&r.drCd!=='CHECK'&&r.crCd!=='CHECK';})
+  .forEach(function(r,i){
+    push({src:'bank',id:r.id,ji:r.ji,date:pD(r.date),den:String(fn.length+i+1)+'B',
+          drCd:rCd(r.drCd),drN:kmN(r.drCd),crCd:rCd(r.crCd),crN:kmN(r.crCd),
+          amt:r.amt,tax:r.tax||0,memo:r.memo,vendor:r.name||'',menzei:r.menzei});
   });
   ccBuild().forEach(function(r){
-    rows.push({"事業CD":r.ji,"事業名":r.jiN||JI_MAP[r.ji]||'',"年月日":r.date,"伝番":r.den,"証番":'',"課":0,"事":'',"小切手NO":'',"借方CD":r.drCd,"借方補助":'',"借方科目名":r.drN||kmN(r.drCd),"借方口座名":'',"貸方CD":r.crCd,"貸方補助":'',"貸方科目名":r.crN||kmN(r.crCd),"貸方口座名":'',"取引金額":r.amt,"税率":r.tax||'',"内、消費税等":r.ta||0,"税抜き金額":r.ex||r.amt,"取引先CD":0,"取引先名（仕入先の氏名又は名称）":r.vendor||'',"実際の仕入れ年月日（期間）":r.jissai||'',"元帳摘要（仕入れ資産等の総称）":r.memo,"ﾌﾟﾛｼﾞｪｸﾄCD":'',"ﾌﾟﾛｼﾞｪｸﾄ名":'',"軽減対象取引区分":'',"控除割合":'',"事業者登録番号":''});
+    push({src:'cc',id:r.den,ji:r.ji,jiN:r.jiN,date:r.date,den:r.den,
+          drCd:r.drCd,drN:r.drN,crCd:r.crCd,crN:r.crN,
+          amt:r.amt,tax:r.tax,memo:r.memo,vendor:r.vendor||'',jissai:r.jissai||'',menzei:r.menzei});
   });
   return rows;
 }
+
+// =============================================
+// 提出前チェック（TKCへ取り込む前に全件検査）
+// =============================================
+function tkcGate(){
+  var rows=buildTKC(), iss=[];
+  // lv=ng/warn/info, sec=飛び先セクション, hit=該当行（{sec,id}の配列）
+  function add(lv,msg,sec,hit){ iss.push({lv:lv,msg:msg,sec:sec||'',hit:hit||[]}); }
+  function mark(rs){ return rs.map(function(r){return {sec:r._src,id:r._id};}); }
+
+  var chk=bankRows.filter(function(r){return r.inc&&(r.drCd==='CHECK'||r.crCd==='CHECK');});
+  if(chk.length) add('ng','勘定科目が未確定の行が'+chk.length+'件あります。「銀行明細」タブで科目を選んでください。',
+                     'bank', chk.map(function(r){return {sec:'bank',id:r.id};}));
+
+  if(SW==='tkc'){
+    var k9=rows.filter(function(r){return String(r['課'])==='9';});
+    if(k9.length) add('ng','課税区分を自動判定できない行が'+k9.length+'件あります。借方・貸方の科目をご確認ください（費用でも収益でもない科目に税率が付いています）。',
+                      k9[0]._src, mark(k9));
+
+    var nj=rows.filter(function(r){return !r['事業CD']&&r['事業CD']!==0;});
+    if(nj.length) add('ng','事業CDが空の行が'+nj.length+'件あります。TKCは部門（事業）が必須です。',
+                      nj[0]._src, mark(nj));
+  }
+
+  var z=rows.filter(function(r){return !(Number(r['取引金額'])>0);});
+  if(z.length) add('ng','取引金額が0または未入力の行が'+z.length+'件あります。', z[0]._src, mark(z));
+
+  var nd=rows.filter(function(r){return !(Number(r['年月日'])>0);});
+  if(nd.length) add('ng','年月日が空の行が'+nd.length+'件あります。', nd[0]._src, mark(nd));
+
+  if(SW==='tkc'){
+    var g8=rows.filter(function(r){return r['税率']==='8.0%';});
+    if(g8.length&&!KEIGEN_CD) add('warn','軽減税率8%の行が'+g8.length+'件あります。「軽減対象取引区分」に入れる値は製品仕様により異なるため空欄で出力します。TKC側の設定をご確認ください。');
+
+    var k52=rows.filter(function(r){return String(r['課'])==='52';});
+    if(k52.length) add('info','免税事業者等からの課税仕入れ（課税区分52）が'+k52.length+'件。取引日から控除割合を自動設定しました。');
+  }
+
+  var seen={},dup=0;
+  rows.forEach(function(r){
+    var k=[r['年月日'],r['借方CD'],r['貸方CD'],r['取引金額']].join('|');
+    if(seen[k]) dup++; else seen[k]=1;
+  });
+  if(dup) add('warn','日付・借方・貸方・金額がまったく同じ行が'+dup+'件あります。二重計上の可能性をご確認ください。');
+
+  if(SW==='tkc'&&TAXMODE==='inc') add('info','税込経理として出力します（内、消費税等・税抜き金額は空欄）。税抜経理の場合は上の設定を切り替えてください。');
+
+  return {rows:rows, issues:iss, ng:iss.filter(function(x){return x.lv==='ng';}).length};
+}
+
 function buildYayoi(){
   var ym=getYM(),ld=lastDay(ym.y,ym.m);
   var date=ym.y+'/'+(String(ym.m).padStart(2,'0'))+'/'+String(ld).padStart(2,'0');
@@ -1005,7 +1196,16 @@ function downloadAll(fmt){
   if(SW==='yayoi')      {rows=buildYayoi();cols=YY_C;fbase='仕訳_弥生_'+ymS;akey='借方金額';}
   else if(SW==='freee') {rows=buildFreee();cols=FR_C;fbase='仕訳_freee_'+ymS;akey='借方金額';}
   else if(SW==='mf')    {rows=buildMF();  cols=MF_C;fbase='仕訳_MF_'+ymS;  akey='借方金額';}
-  else                  {rows=buildTKC(); cols=TKC_C;fbase='仕訳_TKC_'+ymS; akey='取引金額';}
+  else {
+    var g=tkcGate();
+    if(g.ng>0){
+      var msg=g.issues.filter(function(x){return x.lv==='ng';}).map(function(x,i){return (i+1)+'. '+x.msg;}).join('\\n');
+      if(!confirm('提出前チェックで '+g.ng+' 件の問題が見つかりました。\\n\\n'+msg+'\\n\\nこのまま出力するとTKCへの取込でエラーになる可能性が高いです。それでも出力しますか？')) {
+        notif('出力を中止しました。上の「提出前チェック」をご確認ください','orange'); return;
+      }
+    }
+    rows=g.rows; cols=TKC_C; fbase='仕訳_TKC_'+ymS; akey='取引金額';
+  }
   if(!rows.length){notif('出力する仕訳がありません');return;}
   if(fmt==='xlsx'){
     var xml=buildXlsx(rows,cols,fbase);
@@ -1060,14 +1260,113 @@ function renderOutput(){
     bn.map(function(r){return {s:'銀行',dr:rCd(r.drCd),drN:kmN(r.drCd),cr:rCd(r.crCd),crN:kmN(r.crCd),memo:r.memo,amt:r.amt,tax:r.tax||0};}),
     cn.map(function(r){return {s:'CC',dr:r.drCd,drN:r.drN||kmN(r.drCd),cr:r.crCd,crN:r.crN||kmN(r.crCd),memo:r.memo,amt:r.amt,tax:r.tax};})
   );
-  document.getElementById('out-tbody').innerHTML=all.map(function(r){
-    return \`<tr><td><span class="chip \${r.s==='定型'?'cg':r.s==='銀行'?'cb':'ca'}">\${r.s}</span></td>
-      <td><span class="dr">\${r.dr}</span> <span style="font-size:10px">\${cl(r.drN,12)}</span></td>
-      <td><span class="cr2">\${r.cr}</span> <span style="font-size:10px">\${cl(r.crN,12)}</span></td>
-      <td style="color:#888">\${cl(r.memo,20)}</td>
-      <td class="ar">¥\${r.amt.toLocaleString()}</td>
-      <td><span class="chip \${r.tax>0?'cb':'cgr'}">\${r.tax>0?'課税10%':'非課税'}</span></td></tr>\`;
-  }).join('') || '<tr><td colspan="6" style="text-align:center;padding:20px;color:#bbb">仕訳がありません</td></tr>';
+  var KANA={'0':'対象外','1':'課税売上','3':'非課税売上','5':'課税仕入れ',
+            '8':'非課税・不課税','9':'未確定','52':'免税事業者(経過措置)'};
+  var SRC={fixed:['定型','cg'],bank:['銀行','cb'],cc:['CC','ca']};
+  var tb=document.getElementById('out-tbody');
+  clr(tb);
+  var list=buildTKC();
+  if(!list.length){
+    var tr0=document.createElement('tr');
+    tr0.appendChild(el('td',null,'仕訳がありません','text-align:center;padding:20px;color:#bbb')).colSpan=8;
+    tb.appendChild(tr0);
+  }
+  list.forEach(function(r){
+    var ka=String(r['課']), sc=SRC[r._src]||['—','cgr'];
+    var cls = ka==='9' ? 'ca' : (ka==='0'||ka==='8') ? 'cgr' : 'cb';
+    var tr=document.createElement('tr');
+    if(ka==='9') tr.className='hl';
+    function td(child,style){ var c=el('td',null,null,style); c.appendChild(child); tr.appendChild(c); }
+    td(el('span','chip '+sc[1],sc[0]));
+    td(document.createTextNode(r['年月日']||'—'),'font-family:monospace;font-size:10px;color:#aaa;white-space:nowrap');
+    var d=el('td'); d.appendChild(el('span','dr',r['借方CD']));
+    d.appendChild(document.createTextNode(' '));
+    d.appendChild(el('span',null,cl(r['借方科目名'],12),'font-size:10px')); tr.appendChild(d);
+    var c2=el('td'); c2.appendChild(el('span','cr2',r['貸方CD']));
+    c2.appendChild(document.createTextNode(' '));
+    c2.appendChild(el('span',null,cl(r['貸方科目名'],12),'font-size:10px')); tr.appendChild(c2);
+    tr.appendChild(el('td',null,cl(r['元帳摘要（仕入れ資産等の総称）'],20),'color:#888'));
+    tr.appendChild(el('td','ar','¥'+Number(r['取引金額']||0).toLocaleString()));
+    td(el('span','chip '+cls,ka+' '+(KANA[ka]||'')));
+    tr.appendChild(el('td',null,r['税率']||'—','font-family:monospace;font-size:10px;color:#888'));
+    tb.appendChild(tr);
+  });
+  renderGate();
+}
+
+function setTaxMode(v){ TAXMODE=v; renderOutput(); }
+function setKeigen(v){ KEIGEN_CD=String(v||'').trim(); renderOutput(); }
+
+// 小さなDOM組み立てヘルパー（外部入力はテキストノードで入れる）
+function el(tag,cls,txt,style){
+  var e=document.createElement(tag);
+  if(cls) e.className=cls;
+  if(txt!=null) e.textContent=String(txt);
+  if(style) e.setAttribute('style',style);
+  return e;
+}
+function clr(node){ while(node.firstChild) node.removeChild(node.firstChild); }
+
+function renderGate(){
+  var body=document.getElementById('gate-body'), chip=document.getElementById('gate-chip');
+  if(!body) return;
+  var ts=document.getElementById('tax-set'); if(ts) ts.style.display=(SW==='tkc'?'':'none');
+  var g=tkcGate();
+  LAST_GATE=g;
+  chip.textContent = g.ng>0 ? ('要修正 '+g.ng+'件') : '提出可';
+  chip.className = 'chip ' + (g.ng>0?'ca':'cg');
+  syncDlButtons(g.ng);
+  clr(body);
+  if(!g.issues.length){
+    body.setAttribute('style','padding:12px;font-size:12px;color:var(--gn)');
+    body.appendChild(document.createTextNode('検査した項目に問題はありません。そのまま出力できます。'));
+    return;
+  }
+  body.setAttribute('style','padding:12px');
+  var ic={ng:'✕',warn:'▲',info:'i'}, co={ng:'var(--rd)',warn:'#b45309',info:'var(--bl)'};
+  g.issues.forEach(function(x,i){
+    var row=el('div','gate-row');
+    row.appendChild(el('span','gate-ico',ic[x.lv],'color:'+co[x.lv]));
+    row.appendChild(el('span','gate-msg',x.msg,'color:'+(x.lv==='ng'?'var(--ink)':'#777')));
+    if(x.sec){
+      var b=el('button','gate-go','該当を見る →');
+      b.onclick=function(){ gateGo(i); };
+      row.appendChild(b);
+    }
+    body.appendChild(row);
+  });
+  body.appendChild(el('div',null,
+    '✕ が1件でも残っているとTKCの取込でエラーになる可能性があります。出力自体は確認のうえ実行できますが、先に修正することをおすすめします。',
+    'margin-top:10px;padding-top:10px;border-top:.5px solid var(--bd);font-size:11px;color:#aaa;line-height:1.7'));
+}
+
+// 指摘された行へ移動してハイライトする
+function gateGo(i){
+  var x=LAST_GATE&&LAST_GATE.issues[i]; if(!x||!x.sec) return;
+  HL={}; (x.hit||[]).forEach(function(h){ HL[h.sec+':'+h.id]=1; });
+  var btn=null;
+  document.querySelectorAll('.sbi').forEach(function(b){
+    if((b.getAttribute('onclick')||'').indexOf("'"+x.sec+"'")>=0) btn=b;
+  });
+  goSec(x.sec,btn);
+  if(x.sec==='bank') renderBank();
+  setTimeout(function(){
+    var t=document.querySelector('.hl');
+    if(t&&t.scrollIntoView) t.scrollIntoView({block:'center'});
+  },40);
+  var n=(x.hit||[]).length;
+  notif(n?('該当の'+n+'件を黄色で表示しています'):'該当のタブへ移動しました','orange');
+}
+
+// 要修正があるとき出力ボタンを警告色にする
+function syncDlButtons(ng){
+  var warn=(SW==='tkc'&&ng>0);
+  document.querySelectorAll('.tb-dl,.btn-g').forEach(function(b){
+    var t=b.textContent||'';
+    if(t.indexOf('CSV出力')<0&&t.indexOf('Excel出力')<0) return;
+    b.classList.toggle('warn',warn);
+    b.title = warn ? '提出前チェックで要修正があります' : '';
+  });
 }
 
 // =============================================
@@ -1141,7 +1440,11 @@ function notif(msg,cls){
 </body>
 </html>`;
       return new Response(toolHtml, {
-        headers: { 'Content-Type': 'text/html;charset=UTF-8' },
+        // ツール本体はデプロイ直後から新しい版を配りたいのでキャッシュしない
+        headers: {
+          'Content-Type': 'text/html;charset=UTF-8',
+          'Cache-Control': 'no-store, must-revalidate',
+        },
       });
     }
     
