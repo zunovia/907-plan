@@ -194,9 +194,9 @@ tr.hl td,.jr.hl{background:#fff4d6 !important;box-shadow:inset 3px 0 0 var(--am)
     <button class="swb"     id="swb-mf"    onclick="switchSW('mf')">MF</button>
   </div>
   <span class="tb-stat" id="tb-stat">0件 / ¥0</span>
-  <button class="tb-dl" onclick="downloadSLP()">⬇ SLP出力</button>
-  <button class="tb-dl" style="background:#5a6b7a;margin-left:2px" onclick="downloadAll()">⬇ 確認用CSV</button>
-  <button class="tb-dl" style="background:#217346;margin-left:2px" onclick="downloadAll('xlsx')">⬇ 確認用Excel</button>
+  <button class="tb-dl slp-only" onclick="downloadSLP()">⬇ SLP出力</button>
+  <button class="tb-dl" onclick="downloadAll()">⬇ CSV出力</button>
+  <button class="tb-dl" style="background:#217346;margin-left:2px" onclick="downloadAll('xlsx')">⬇ Excel出力</button>
   <button class="tb-dl" style="background:#e74c3c;margin-left:4px" onclick="resetAll()">↻ リフレッシュ</button>
 </div>
 
@@ -360,18 +360,18 @@ tr.hl td,.jr.hl{background:#fff4d6 !important;box-shadow:inset 3px 0 0 var(--am)
 <!-- OUTPUT -->
 <div class="sec" id="sec-out">
   <div class="shd">
-    <div><div class="stitle">出力確認</div><div class="ssub" id="out-lbl">出力形式: TKC SLP（47列・zip）</div></div>
+    <div><div class="stitle">出力確認</div><div class="ssub" id="out-lbl">出力形式: TKC 29列（確認用）</div></div>
     <div style="display:flex;gap:6px">
-      <button class="btn btn-g" id="btn-slp" onclick="downloadSLP()" title="TKCの「他社システム自動仕訳の読込」に投入するファイル">⬇ SLP出力（zip）</button>
-      <button class="btn btn-o" onclick="downloadAll()">⬇ 確認用CSV</button>
-      <button class="btn btn-o" onclick="downloadAll('xlsx')">⬇ 確認用Excel</button>
+      <button class="btn btn-g slp-only" id="btn-slp" onclick="downloadSLP()" title="TKCの「他社システム自動仕訳の読込」に投入するファイル">⬇ SLP出力（zip）</button>
+      <button class="btn btn-g" onclick="downloadAll()">⬇ CSV出力</button>
+      <button class="btn" style="background:#217346;color:#fff;border-color:#217346" onclick="downloadAll('xlsx')">⬇ Excel出力</button>
     </div>
   </div>
   <div id="out-sums" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px"></div>
   <div class="card" style="margin-bottom:12px" id="tax-set">
     <div class="cardh"><span class="cardt">税務設定</span><span style="font-size:10px;color:#aaa;margin-left:5px">TKC出力に反映されます</span></div>
     <div style="padding:12px;display:flex;flex-wrap:wrap;gap:16px;align-items:center">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+      <label class="slp-only" style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
         <span style="color:var(--ink3)">関与先コード</span>
         <input id="set-kanyo" value="" placeholder="0〜999" onchange="setKanyo(this.value)"
                style="font-size:12px;padding:4px 6px;width:70px;font-family:monospace">
@@ -389,12 +389,18 @@ tr.hl td,.jr.hl{background:#fff4d6 !important;box-shadow:inset 3px 0 0 var(--am)
       </label>
     </div>
     <div style="padding:0 12px 12px;font-size:11.5px;color:var(--ink3);line-height:1.8">
+<span class="slp-only">
       <strong>SLP（zip）がTKCへの取込ファイルです。</strong>
       「日常業務 ＞ 仕訳データの読込 ＞ 他社システム自動仕訳の読込」で読み込みます。
       47列タブ区切り・cp932・改行CRLF、税率は 1000／800、取引年月日は西暦8桁で生成します。
       免税事業者からの課税仕入れ（課税区分52等）は部門明細(.cls)を同梱し、
       内、消費税等はTKC側で控除割合込みに自動計算させます。<br>
-      確認用CSV／Excelは<strong>目視確認のための表</strong>で、取込には使いません（税率は 10.0% 表記）。
+      </span><span class="slp-off">
+      課税区分（0・1・5・8・52）と事業区分、税率の表記（10.0% / 8.0%）はTKCの形式で自動生成します。
+      免税事業者からの課税仕入れは、取引日から経過措置の控除割合（80% / 70% / 50% / 30%）を自動で入れます。<br>
+      <strong>TKCへ直接取り込むSLP（zip）の出力は、実機での検証中のため一時的に停止しています。</strong>
+      現在の出力は目視確認用の表です。
+      </span>
     </div>
   </div>
   <div class="card" style="margin-bottom:12px">
@@ -1022,6 +1028,10 @@ var MF_C=["取引日","借方勘定科目","借方補助科目","借方税区分
 // =============================================
 var TAXMODE = 'inc';   // 'inc'=税込経理（既定） / 'exc'=税抜経理
 var SLP_KANYO = '';    // 関与先コード（法人ごとに異なるので既定値は持たない）
+// SLP出力は実機での取込検証が済むまで表に出さない。
+// 補助コード（口座別管理科目に必須）が未対応で、今出すと読込エラーになるため。
+// 検証が済んだら true に戻すだけでよい。詳細は TODO.md
+var SLP_ENABLED = false;
 var LAST_GATE = null;  // 直近の提出前チェック結果
 var HL = {};           // ハイライト対象 'sec:id' → 1
 var KEIGEN_CD = '';    // 軽減対象取引区分に入れる値（製品仕様により異なるため既定は空）
@@ -1227,6 +1237,9 @@ function slpText(rows){
 }
 
 function downloadSLP(){
+  if(!SLP_ENABLED){
+    notif('SLP出力は実機での取込検証中のため停止しています','orange'); return;
+  }
   var g=tkcGate();
   if(g.ng>0){
     var msg=g.issues.filter(function(x){return x.lv==='ng';})
@@ -1332,7 +1345,7 @@ function tkcGate(){
   });
   if(dup) add('warn','日付・借方・貸方・金額がまったく同じ行が'+dup+'件あります。二重計上の可能性をご確認ください。');
 
-  if(SW==='tkc'){
+  if(SW==='tkc'&&SLP_ENABLED){
     var kn=Number(SLP_KANYO);
     if(!(SLP_KANYO!==''&&Number.isInteger(kn)&&kn>=0&&kn<=999))
       add('ng','関与先コードが未設定です。SLPの1列目に必須なので、上の「税務設定」に入力してください（0〜999）。','','');
@@ -1491,7 +1504,8 @@ function renderOutput(){
   var fA=fn.reduce(function(s,r){return s+r.amt;},0);
   var bA=bn.reduce(function(s,r){return s+r.amt;},0);
   var cA=cn.reduce(function(s,r){return s+r.amt;},0);
-  var swN={tkc:'TKC SLP（47列・zip）＋確認用CSV',yayoi:'弥生インポート形式',freee:'freee 取引インポート形式',mf:'MF 仕訳インポート形式'};
+  var swN={tkc:(SLP_ENABLED?'TKC SLP（47列・zip）＋確認用CSV':'TKC 29列（確認用）'),
+           yayoi:'弥生インポート形式',freee:'freee 取引インポート形式',mf:'MF 仕訳インポート形式'};
   var lbl=document.getElementById('out-lbl'); if(lbl) lbl.textContent='出力形式: '+(swN[SW]||SW);
   document.getElementById('out-sums').innerHTML=\`
     <div style="background:var(--sf);border:.5px solid var(--bd);border-radius:var(--r);padding:10px;text-align:center"><div style="font-size:10px;color:#aaa;margin-bottom:3px">定型仕訳</div><div style="font-size:17px;font-weight:700">¥\${fA.toLocaleString()}</div><div style="font-size:10px;color:#aaa">\${fn.length}件</div></div>
@@ -1554,7 +1568,12 @@ function renderGate(){
   var body=document.getElementById('gate-body'), chip=document.getElementById('gate-chip');
   if(!body) return;
   var ts=document.getElementById('tax-set'); if(ts) ts.style.display=(SW==='tkc'?'':'none');
-  var bs=document.getElementById('btn-slp'); if(bs) bs.style.display=(SW==='tkc'?'':'none');
+  document.querySelectorAll('.slp-only').forEach(function(e){
+    e.style.display = (SLP_ENABLED&&SW==='tkc') ? '' : 'none';
+  });
+  document.querySelectorAll('.slp-off').forEach(function(e){
+    e.style.display = SLP_ENABLED ? 'none' : '';
+  });
   var g=tkcGate();
   LAST_GATE=g;
   chip.textContent = g.ng>0 ? ('要修正 '+g.ng+'件') : '提出可';
