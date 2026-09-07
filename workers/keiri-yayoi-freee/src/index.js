@@ -1158,10 +1158,9 @@ var MF_C=["取引日","借方勘定科目","借方補助科目","借方税区分
 // =============================================
 var TAXMODE = 'inc';   // 'inc'=税込経理（既定） / 'exc'=税抜経理
 var SLP_KANYO = '';    // 関与先コード（法人ごとに異なるので既定値は持たない）
-// SLP出力は実機での取込検証が済むまで既定では表に出さない。
-// 検証したいときは URL に ?slp=1 を付けると出る（例: /tool.html?slp=1）。
-// 実機で通ったら既定を true にする。詳細は TODO.md
-var SLP_ENABLED = false;
+// SLP出力。本番運用中のSLP生成パイプラインと突き合わせて検証済みのため既定で有効。
+// 一時的に隠したいときは false にする。詳細は TODO.md
+var SLP_ENABLED = true;
 try{ if(new URLSearchParams(location.search).get('slp')==='1') SLP_ENABLED = true; }catch(e){}
 var LAST_GATE = null;  // 直近の提出前チェック結果
 var HL = {};           // ハイライト対象 'sec:id' → 1
@@ -1412,6 +1411,7 @@ function validateSLP(b){
     }
     if(String(c[18])!=='0'&&c[19]) err.push(n+'行目: 取引先コードと取引先名の二重指定');
     if(cp932Len(c[23])>80) err.push(n+'行目: 元帳摘要が80バイト超');
+    if(String(c[6])==='9') err.push(n+'行目: 課税区分9（未確定）のままです');
     if(cp932Len(c[19])>32) err.push(n+'行目: 取引先名が32バイト超');
   });
   b.cls.forEach(function(c,i){
@@ -1681,6 +1681,16 @@ function tkcGate(){
     if(future.length) add('ng','取引年月日が今日より先の行が'+future.length+'件あります。'
       +'TKCは将来日付の仕訳を受け付けないため、月末付けの定型仕訳はその日が来てから出力してください。',
       future[0]._src, mark(future));
+    // 取引先名は全仕訳に入れるのが本番運用のルール。空欄は相手が特定できない場合だけ
+    var novendor=rows.filter(function(r){
+      return !String(r['取引先名（仕入先の氏名又は名称）']||'').trim();
+    });
+    if(novendor.length) add('warn','取引先名が空の行が'+novendor.length+'件あります。'
+      +'相手が特定できる取引には必ず入れてください（元帳で後から追えなくなります）。',
+      novendor[0]._src, mark(novendor));
+    if(rows.length) add('info','取引先コードは0（随時入力）で出力し、名称を20列目に入れています。'
+      +'TKCの取引先マスタに登録済みの先はコードで出したほうが元帳がそろいます。');
+
     var nosub=rows.filter(function(r){
       return (isSubManaged(r['借方CD'])&&!r['借方補助']) || (isSubManaged(r['貸方CD'])&&!r['貸方補助']);
     });
