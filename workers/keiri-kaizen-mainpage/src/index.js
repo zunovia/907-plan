@@ -330,7 +330,7 @@ input:focus,select:focus{border-color:#999}
     <div class="cardh"><span class="cardt">対応会計ソフト（上のボタンで切替）</span></div>
     <div style="padding:14px">
       <div class="swcards">
-        <div class="swcard act" id="swc-tkc"><div style="font-size:15px;font-weight:700;color:var(--cy);margin-bottom:3px">TKC</div><div style="font-size:10px;color:#888;margin-bottom:6px">29列CSV / SLP</div><span class="chip cg">✓ 対応済み</span></div>
+        <div class="swcard act" id="swc-tkc"><div style="font-size:15px;font-weight:700;color:var(--cy);margin-bottom:3px">TKC</div><div style="font-size:10px;color:#888;margin-bottom:6px">SLP（47列）＋確認用CSV</div><span class="chip cg">✓ 対応済み</span></div>
         <div class="swcard" id="swc-yayoi"><div style="font-size:15px;font-weight:700;color:#e85a10;margin-bottom:3px">弥生</div><div style="font-size:10px;color:#888;margin-bottom:6px">弥生インポート形式</div><span class="chip" style="background:#eee;color:#888;font-size:9px">個別対応</span></div>
         <div class="swcard" id="swc-freee"><div style="font-size:15px;font-weight:700;color:#00b894;margin-bottom:3px">freee</div><div style="font-size:10px;color:#888;margin-bottom:6px">仕訳インポートCSV</div><span class="chip cg">✓ 対応済み</span></div>
         <div class="swcard" id="swc-mf"><div style="font-size:15px;font-weight:700;color:#0066cc;margin-bottom:3px">MF</div><div style="font-size:10px;color:#888;margin-bottom:6px">仕訳インポート形式</div><span class="chip" style="background:#eee;color:#888;font-size:9px">個別対応</span></div>
@@ -430,7 +430,7 @@ input:focus,select:focus{border-color:#999}
 <!-- OUTPUT -->
 <div class="sec" id="sec-out">
   <div class="shd">
-    <div><div class="stitle">出力確認</div><div class="ssub" id="out-lbl">出力形式: TKC 29カラム</div><div style="font-size:11px;color:#b45309;margin-top:3px">⚠ ここに出るのはAIの下書きです。会計ソフトへ取り込む前に、必ず内容を確認してください。</div></div>
+    <div><div class="stitle">出力確認</div><div class="ssub" id="out-lbl">出力形式: TKC SLP（47列・zip）</div><div style="font-size:11px;color:#b45309;margin-top:3px">⚠ ここに出るのはAIの下書きです。会計ソフトへ取り込む前に、必ず内容を確認してください。</div></div>
     <div style="display:flex;gap:6px">
       <button class="btn btn-g" onclick="downloadAll()">⬇ CSV出力</button>
       <button class="btn" style="background:#217346;color:#fff;border-color:#217346" onclick="downloadAll('xlsx')">⬇ Excel出力</button>
@@ -678,7 +678,7 @@ function switchSW(sw){
     if(b) b.className = 'swb' + (s===sw ? ' on' : '');
     if(c) c.className = 'swcard' + (s===sw ? ' act' : '');
   });
-  var fmt = {tkc:'TKC 29カラム形式',yayoi:'弥生インポート形式',freee:'freee 仕訳インポート形式',mf:'MF 仕訳インポート形式'};
+  var fmt = {tkc:'TKC SLP（47列・zip）',yayoi:'弥生インポート形式',freee:'freee 仕訳インポート形式',mf:'MF 仕訳インポート形式'};
   var lbl = document.getElementById('out-lbl');
   if(lbl) lbl.textContent = '出力形式: ' + (fmt[sw] || sw);
   var nm  = {tkc:'TKC',yayoi:'弥生会計',freee:'freee',mf:'マネーフォワード'};
@@ -1986,8 +1986,8 @@ footer{
             <div style="font-size:11px;color:#999">税理士向け会計システム</div>
           </div>
         </div>
-        <div style="font-size:12px;color:#555;line-height:1.8;margin-bottom:14px">税理士事務所・法人で広く使われる高機能会計システム。仕訳読込テンプレートに合わせた29列CSVの生成に対応し、さらに「他社システム自動仕訳の読込」用のSLP／CLS生成まで実務で運用しています。</div>
-        <div style="background:#0078c8;border-radius:6px;padding:8px 10px;font-size:11px;color:#fff;font-weight:600;text-align:center">✓ 29列CSV ＋ SLP／CLS 対応</div>
+        <div style="font-size:12px;color:#555;line-height:1.8;margin-bottom:14px">税理士事務所・法人で広く使われる高機能会計システム。「他社システム自動仕訳の読込」用のSLP／CLS（47列・タブ区切り・cp932・zip）の生成に対応。目視確認用の表も同時に出力します。</div>
+        <div style="background:#0078c8;border-radius:6px;padding:8px 10px;font-size:11px;color:#fff;font-weight:600;text-align:center">✓ SLP／CLS（47列）対応</div>
       </div>
 
       <!-- 弥生: 開発対応 -->
@@ -2398,7 +2398,7 @@ footer{
       </div>
       <div class="spec-card">
         <div class="spec-card-title">CSV出力仕様（TKC）</div>
-        <div class="spec-row"><span class="spec-key">カラム数</span><span class="spec-val">29列（テンプレート調整可）</span></div>
+        <div class="spec-row"><span class="spec-key">カラム数</span><span class="spec-val">29列（目視確認用の表）</span></div>
         <div class="spec-row"><span class="spec-key">日付形式</span><span class="spec-val">令和 (YMMDD)</span></div>
         <div class="spec-row"><span class="spec-key">実際の仕入年月日</span><span class="spec-val ok">✓ 対応</span></div>
         <div class="spec-row"><span class="spec-key">文字コード</span><span class="spec-val">UTF-8 (BOM)</span></div>
@@ -2440,7 +2440,7 @@ footer{
         <div class="cost-list">
           <div class="cost-list-item">月末定型仕訳 52件 まとめて生成</div>
           <div class="cost-list-item">銀行CSV → 仕訳変換（6口座）</div>
-          <div class="cost-list-item">TKC 29列CSV出力</div>
+          <div class="cost-list-item">TKC SLP（47列・zip）出力</div>
           <div class="cost-list-item">ブラウザのみで動作</div>
         </div>
       </div>
