@@ -1,5 +1,5 @@
 // 配布版バナーに出す最終更新日。ツールを改修したらここを更新する
-const TOOL_UPDATED = '2026/09/07';
+const TOOL_UPDATED = '2026/09/08';
 
 export default {
   async fetch(request) {
@@ -212,6 +212,7 @@ tr.hl td,.jr.hl{background:#fff4d6 !important;box-shadow:inset 3px 0 0 var(--am)
   <div class="sbi" onclick="goSec('out',this)"><span class="sbd" style="background:var(--am)"></span>CSV出力確認</div>
   <div class="sbdv"></div>
   <div class="sbh">設定</div>
+  <div class="sbi" onclick="goSec('subacc',this)"><span class="sbd" style="background:#7a5f14"></span>口座・補助コード<span id="sb-sa" style="font-size:9px;color:#bbb;margin-left:auto;font-family:monospace"></span></div>
   <div class="sbi" onclick="goSec('api',this)"><span class="sbd" style="background:var(--cy)"></span>🔑 APIキー設定</div>
   <div class="sbdv"></div>
   <div class="sbtot">
@@ -310,7 +311,7 @@ tr.hl td,.jr.hl{background:#fff4d6 !important;box-shadow:inset 3px 0 0 var(--am)
   <div id="bank-wrap" style="display:none">
     <div class="card">
       <div class="cardh"><span class="cardt">仕訳一覧</span><span style="font-size:10px;color:#aaa;margin-left:5px">黄色行 = 要確認</span></div>
-      <div class="tscroll"><table><thead><tr><th>日付</th><th>口座</th><th>取引先</th><th>借方</th><th></th><th>貸方</th><th class="ar">金額</th><th>摘要</th><th>出力</th></tr></thead>
+      <div class="tscroll"><table><thead><tr><th>日付</th><th>口座</th><th>取引先</th><th>借方</th><th></th><th>貸方</th><th class="ar">金額</th><th>摘要</th><th>仕入先</th><th>出力</th></tr></thead>
       <tbody id="bank-tbody"></tbody></table></div>
     </div>
   </div>
@@ -414,6 +415,55 @@ tr.hl td,.jr.hl{background:#fff4d6 !important;box-shadow:inset 3px 0 0 var(--am)
   </div>
 </div>
 
+<!-- SUBACC -->
+<div class="sec" id="sec-subacc">
+  <div class="shd">
+    <div><div class="stitle">口座・補助コード</div>
+    <div class="ssub">TKCで口座別管理している科目の補助コードを登録します</div></div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-o" onclick="exportSubacc()">⬇ 書き出し</button>
+      <label class="btn btn-o" style="cursor:pointer">⬆ 読み込み
+        <input type="file" accept=".json,application/json" style="display:none"
+               onchange="if(this.files[0])importSubacc(this.files[0]);this.value='';">
+      </label>
+      <button class="btn btn-g" onclick="addSubacc()">＋ 行を追加</button>
+    </div>
+  </div>
+
+  <div style="background:var(--ambg);border:.5px solid rgba(146,64,14,.2);border-radius:var(--r);padding:12px 14px;font-size:12px;line-height:1.85;margin-bottom:12px;color:#5a3d0a">
+    TKCで<strong>口座別（補助）管理している科目</strong>は、SLPに補助コードが入っていないと
+    「補助コードが入力されていないか、誤った補助コードが入力されています」で<strong>ファイル全体が読み込めません</strong>。<br>
+    補助コードはTKCの「勘定科目残高」や元帳の口座名から確認できます。
+    ここに登録した内容は<strong>このブラウザにだけ</strong>保存され、外部には送信されません。
+  </div>
+
+  <div class="card">
+    <div class="cardh"><span class="cardt">登録済みの口座・補助</span></div>
+    <div class="tscroll">
+      <table>
+        <thead><tr>
+          <th style="width:90px">科目コード</th>
+          <th style="width:80px">補助コード</th>
+          <th>名称</th>
+          <th>CSVファイル名の判別語</th>
+          <th style="width:90px">既定の事業CD</th>
+          <th style="width:60px"></th>
+        </tr></thead>
+        <tbody id="sa-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="font-size:11.5px;color:var(--ink3);line-height:1.85;padding:4px 2px">
+    <strong>科目コード</strong>… 1113（普通預金）など、補助で管理している科目。<br>
+    <strong>補助コード</strong>… TKCに登録済みの補助コード。半角2バイト以内（例 <code>10</code> <code>21</code> <code>Z</code>）。<br>
+    <strong>名称</strong>… 画面に出す呼び名。口座名でも拠点名でも構いません。<br>
+    <strong>CSVファイル名の判別語</strong>… 銀行CSVのファイル名にこの文字が含まれていたら、この口座として取り込みます。
+    空欄なら自動判定しません。<br>
+    <strong>既定の事業CD</strong>… その口座の取引に既定で付ける事業（部門）コード。
+  </div>
+</div>
+
 <!-- API -->
 <div class="sec" id="sec-api">
   <div class="shd"><div><div class="stitle">🔑 APIキー設定</div><div class="ssub">カード明細のAI読取に使用</div></div></div>
@@ -443,6 +493,8 @@ tr.hl td,.jr.hl{background:#fff4d6 !important;box-shadow:inset 3px 0 0 var(--am)
 // 状態変数
 // =============================================
 var SW = 'tkc';
+// 補助コード（口座別管理）の設定。init の renderFixed より先に要るのでここで宣言する
+var SUBACC = [];
 var fixedRows = [], bankRows = [], ccCards = [], ccImgs = [];
 var ccPayDate = '', ccTotal = 0;
 var loaded = {}, rowId = 0, ccRid = 0, nid = 0;
@@ -522,8 +574,11 @@ var CAT_B = {給与:'var(--gnbg)',減価償却:'var(--blbg)',地代家賃:'var(-
 // =============================================
 (function init(){
   fixedRows = DEFAULT_MASTER.map(function(d){ return Object.assign({},d); });
+  loadSubacc();
   renderFixed();
   updateTop();
+  renderSubacc();
+  var sn=document.getElementById('sb-sa'); if(sn) sn.textContent=SUBACC.length||'';
   SLP_KANYO = lsGet('tkc_kanyo') || '';
   var ke = document.getElementById('set-kanyo'); if(ke) ke.value = SLP_KANYO;
   var k = lsGet('tkc_api_key');
@@ -646,6 +701,12 @@ function renderFixed(){
               <div class="fld"><span class="flbl">部門CD</span><select onchange="updF('\${r.id}','ji',+this.value)">\${jiOpt(r.ji)}</select></div>
               <div class="fld"><span class="flbl">借方科目</span><select onchange="updF('\${r.id}','drCd',this.value)">\${kmOpt(r.drCd)}</select></div>
               <div class="fld"><span class="flbl">貸方科目</span><select onchange="updF('\${r.id}','crCd',this.value)">\${kmOpt(r.crCd)}</select></div>
+              \${isSubManaged(r.drCd)?\`<div class="fld"><span class="flbl">借方補助</span><select onchange="updF('\${r.id}','drSub',this.value)">\${subOpt(r.drCd,r.drSub)}</select></div>\`:''}
+              \${isSubManaged(r.crCd)?\`<div class="fld"><span class="flbl">貸方補助</span><select onchange="updF('\${r.id}','crSub',this.value)">\${subOpt(r.crCd,r.crSub)}</select></div>\`:''}
+              <div class="fld"><span class="flbl">仕入先</span><select onchange="updF('\${r.id}','menzei',this.value==='1')">
+                <option value="0"\${r.menzei?'':' selected'}>適格請求書あり（課税区分5）</option>
+                <option value="1"\${r.menzei?' selected':''}>免税事業者等（課税区分52）</option>
+              </select></div>
             </div>
             <div style="display:flex;gap:5px;justify-content:flex-end;margin-top:8px">
               <button class="btn btn-o btn-sm" style="border-color:#e8a5a5;color:var(--rd)" onclick="delF('\${r.id}')">削除</button>
@@ -702,8 +763,11 @@ function onFiles(files){
       var bytes=new Uint8Array(ev.target.result);
       var enc=(bytes[0]===0xEF&&bytes[1]===0xBB)?'utf-8':'shift-jis';
       var text=new TextDecoder(enc).decode(bytes);
-      var acct=f.name.toLowerCase().indexOf('yucho')>=0||f.name.indexOf('ゆうちょ')>=0?'ゆうちょ':f.name.indexOf('jigyou1')>=0?'事業1':'総務';
-      loaded[f.name]={text:text,acct:acct};
+      // 補助コード設定に一致すればそれを使う。無ければ従来の判定にする
+      var hit=acctByFile(f.name);
+      var acct=hit ? (hit.name||hit.sub||'口座')
+        : (f.name.toLowerCase().indexOf('yucho')>=0||f.name.indexOf('ゆうちょ')>=0?'ゆうちょ':f.name.indexOf('jigyou1')>=0?'事業1':'総務');
+      loaded[f.name]={text:text,acct:acct,sa:hit||null};
       processBank();
     };
     fr.readAsArrayBuffer(f);
@@ -747,8 +811,15 @@ function processBank(){
   bankRows=[];
   Object.keys(loaded).forEach(function(fname){
     var entry=loaded[fname],acct=entry.acct,text=entry.text;
-    var ai=BACCT[acct]||BACCT['総務'];
-    var txs=(acct==='ゆうちょ')?parseYucho(text):parseUFJ(text);
+    var ai;
+    if(entry.sa){
+      ai={cd:String(entry.sa.cd), sub:String(entry.sa.sub||''),
+          tag:'at-b', ji:(entry.sa.ji!==''&&entry.sa.ji!=null)?Number(entry.sa.ji):10};
+    } else {
+      ai=BACCT[acct]||BACCT['総務']; ai=({cd:ai.cd,sub:'',tag:ai.tag,ji:ai.ji});
+    }
+    var isYucho = entry.sa ? (String(entry.sa.cd)==='1112') : (acct==='ゆうちょ');
+    var txs=isYucho?parseYucho(text):parseUFJ(text);
     txs.forEach(function(tx){
       var rule=matchBank(tx.name);
       var drCd,crCd,st='check',ji=ai.ji,memo=tx.name||'',tax=0.1;
@@ -763,7 +834,12 @@ function processBank(){
         memo=tx.name||'';
         tax=0;
       }
-      bankRows.push({id:rowId++,date:tx.date,acct:acct,ai:ai,io:tx.io,name:tx.name||'',drCd:drCd,crCd:crCd,amt:tx.amt,memo:memo,ji:ji,st:st,tax:tax,inc:(st!=='skip')});
+      // 自口座側にだけ補助コードが付く
+      var drSub = (tx.io==='入金') ? (ai.sub||'') : '';
+      var crSub = (tx.io==='入金') ? '' : (ai.sub||'');
+      bankRows.push({id:rowId++,date:tx.date,acct:acct,ai:ai,io:tx.io,name:tx.name||'',
+                     drCd:drCd,crCd:crCd,drSub:drSub,crSub:crSub,
+                     amt:tx.amt,memo:memo,ji:ji,st:st,tax:tax,inc:(st!=='skip')});
     });
   });
   bankRows.sort(function(a,b){return a.date.localeCompare(b.date);});
@@ -783,19 +859,22 @@ function renderBank(){
       <td style="font-family:monospace;font-size:10px;color:#aaa;white-space:nowrap">\${fmtD(r.date)}</td>
       <td><span class="at \${r.ai.tag||'at-s'}">\${r.acct}</span></td>
       <td style="font-size:10px;color:#888;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">\${escH(cl(r.name,15))}</td>
-      <td>\${dOk?\`<span class="dr">\${rCd(r.drCd)}</span>\`:\`<select style="font-size:10px;max-width:150px" onchange="updB(\${r.id},'drCd',this.value)">\${kmOpt(r.drCd)}</select>\`}</td>
+      <td>\${dOk?\`<span class="dr">\${rCd(r.drCd)}</span>\`:\`<select style="font-size:10px;max-width:150px" onchange="updB(\${r.id},'drCd',this.value)">\${kmOpt(r.drCd)}</select>\`}\${isSubManaged(r.drCd)?\`<select style="font-size:9px;max-width:90px;margin-left:3px" onchange="updB(\${r.id},'drSub',this.value)">\${subOpt(r.drCd,r.drSub)}</select>\`:''}</td>
       <td style="color:#ddd;font-size:10px;text-align:center">→</td>
-      <td>\${cOk?\`<span class="cr2">\${rCd(r.crCd)}</span>\`:\`<select style="font-size:10px;max-width:150px" onchange="updB(\${r.id},'crCd',this.value)">\${kmOpt(r.crCd)}</select>\`}</td>
+      <td>\${cOk?\`<span class="cr2">\${rCd(r.crCd)}</span>\`:\`<select style="font-size:10px;max-width:150px" onchange="updB(\${r.id},'crCd',this.value)">\${kmOpt(r.crCd)}</select>\`}\${isSubManaged(r.crCd)?\`<select style="font-size:9px;max-width:90px;margin-left:3px" onchange="updB(\${r.id},'crSub',this.value)">\${subOpt(r.crCd,r.crSub)}</select>\`:''}</td>
       <td class="ar"><span style="font-size:9px;color:\${r.io==='入金'?'var(--gn)':'var(--rd)'}">\${r.io}</span> ¥\${r.amt.toLocaleString()}</td>
       <td><input style="font-size:10px;padding:3px 5px;width:120px" value="\${escH(r.memo)}" onchange="updB(\${r.id},'memo',this.value)"></td>
+      <td>\${(r.tax>0&&isCost(r.drCd))?\`<select style="font-size:9px;max-width:110px" onchange="updB(\${r.id},'menzei',this.value==='1')"><option value="0"\${r.menzei?'':' selected'}>適格請求書あり</option><option value="1"\${r.menzei?' selected':''}>免税事業者等</option></select>\`:'<span style="font-size:9px;color:#ccc">—</span>'}</td>
       <td><label style="display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox"\${r.inc&&r.st!=='skip'?' checked':''} onchange="updB(\${r.id},'inc',this.checked)"><span style="font-size:9px;color:#aaa">出力</span></label></td>
     </tr>\`;
-  }).join('') || '<tr><td colspan="9" style="text-align:center;padding:16px;color:#bbb">データなし</td></tr>';
+  }).join('') || '<tr><td colspan="10" style="text-align:center;padding:16px;color:#bbb">データなし</td></tr>';
 }
 function updB(id,field,val){
   var r=bankRows.find(function(x){return x.id===id;});
   if(r) r[field]=val;
   updateTop();
+  // 科目・補助・免税は課税区分や補助の要否に影響するので描き直す
+  if(['drCd','crCd','menzei'].indexOf(field)>=0) renderBank();
 }
 function renderPills(){
   document.getElementById('pills').innerHTML=Object.keys(loaded).map(function(n){
@@ -1028,10 +1107,11 @@ var MF_C=["取引日","借方勘定科目","借方補助科目","借方税区分
 // =============================================
 var TAXMODE = 'inc';   // 'inc'=税込経理（既定） / 'exc'=税抜経理
 var SLP_KANYO = '';    // 関与先コード（法人ごとに異なるので既定値は持たない）
-// SLP出力は実機での取込検証が済むまで表に出さない。
-// 補助コード（口座別管理科目に必須）が未対応で、今出すと読込エラーになるため。
-// 検証が済んだら true に戻すだけでよい。詳細は TODO.md
+// SLP出力は実機での取込検証が済むまで既定では表に出さない。
+// 検証したいときは URL に ?slp=1 を付けると出る（例: /tool.html?slp=1）。
+// 実機で通ったら既定を true にする。詳細は TODO.md
 var SLP_ENABLED = false;
+try{ if(new URLSearchParams(location.search).get('slp')==='1') SLP_ENABLED = true; }catch(e){}
 var LAST_GATE = null;  // 直近の提出前チェック結果
 var HL = {};           // ハイライト対象 'sec:id' → 1
 var KEIGEN_CD = '';    // 軽減対象取引区分に入れる値（製品仕様により異なるため既定は空）
@@ -1260,6 +1340,101 @@ function downloadSLP(){
   notif(m, b.lost.length?'orange':'green');
 }
 
+// =============================================
+// 補助コード（口座別管理）
+//   TKCで口座別管理している科目は、SLPの補助コードが必須。
+//   法人ごとに違うので既定値は持たず、利用者が登録してブラウザに保存する。
+//   1件 = {cd:科目コード, sub:補助コード, name:表示名, key:CSVファイル名の判別語, ji:既定の事業CD}
+// =============================================
+function loadSubacc(){
+  try{ SUBACC = JSON.parse(lsGet('tkc_subacc')||'[]') || []; }catch(e){ SUBACC = []; }
+  if(!Array.isArray(SUBACC)) SUBACC = [];
+}
+function saveSubacc(){
+  lsSet('tkc_subacc', JSON.stringify(SUBACC));
+  var sn=document.getElementById('sb-sa'); if(sn) sn.textContent=SUBACC.length||'';
+  renderSubacc(); renderBank(); renderFixed(); renderOutput();
+}
+// その科目が補助管理されているか
+function isSubManaged(cd){
+  cd = String(cd||'');
+  return SUBACC.some(function(a){ return String(a.cd)===cd; });
+}
+// 科目に紐づく補助の一覧
+function subsOf(cd){
+  cd = String(cd||'');
+  return SUBACC.filter(function(a){ return String(a.cd)===cd; });
+}
+// ファイル名から口座を特定する
+function acctByFile(fname){
+  var lower = String(fname||'').toLowerCase();
+  for(var i=0;i<SUBACC.length;i++){
+    var k = String(SUBACC[i].key||'').trim();
+    if(k && (lower.indexOf(k.toLowerCase())>=0 || String(fname).indexOf(k)>=0)) return SUBACC[i];
+  }
+  return null;
+}
+// 補助コードの選択肢
+function subOpt(cd, cur){
+  var list = subsOf(cd), out = '<option value="">（未選択）</option>';
+  list.forEach(function(a){
+    out += '<option value="'+escH(a.sub)+'"'+(String(cur)===String(a.sub)?' selected':'')+'>'
+        +  escH(a.sub)+' '+escH(a.name||'')+'</option>';
+  });
+  return out;
+}
+
+// ── 設定画面 ────────────────────────────────────────────────
+function renderSubacc(){
+  var tb = document.getElementById('sa-tbody');
+  if(!tb) return;
+  clr(tb);
+  if(!SUBACC.length){
+    var tr0=document.createElement('tr');
+    var td0=el('td',null,'まだ登録がありません。「＋行を追加」から、TKCで口座別管理している科目と補助コードを登録してください。',
+               'text-align:center;padding:18px;color:#bbb');
+    td0.colSpan=6; tr0.appendChild(td0); tb.appendChild(tr0);
+    return;
+  }
+  SUBACC.forEach(function(a,i){
+    var tr=document.createElement('tr');
+    function cell(field,val,ph,w){
+      var td=el('td'); var inp=document.createElement('input');
+      inp.value=val==null?'':val; inp.placeholder=ph||'';
+      inp.setAttribute('style','font-size:11px;padding:3px 5px;width:'+(w||'100%'));
+      inp.onchange=function(){ SUBACC[i][field]=this.value.trim(); saveSubacc(); };
+      td.appendChild(inp); tr.appendChild(td);
+    }
+    cell('cd',a.cd,'1113','70px');
+    cell('sub',a.sub,'10','60px');
+    cell('name',a.name,'総務');
+    cell('key',a.key,'soumu');
+    cell('ji',a.ji,'10','70px');
+    var td=el('td');
+    var b=el('button','btn btn-o btn-sm','削除');
+    b.setAttribute('style','border-color:#e8a5a5;color:var(--rd);padding:2px 8px;font-size:11px');
+    b.onclick=function(){ SUBACC.splice(i,1); saveSubacc(); };
+    td.appendChild(b); tr.appendChild(td);
+    tb.appendChild(tr);
+  });
+}
+function addSubacc(){ SUBACC.push({cd:'',sub:'',name:'',key:'',ji:''}); saveSubacc(); }
+function exportSubacc(){
+  dlFile(new Blob([JSON.stringify(SUBACC,null,2)],{type:'application/json'}), '補助コード設定.json');
+  notif('設定を書き出しました','green');
+}
+function importSubacc(file){
+  var fr=new FileReader();
+  fr.onload=function(e){
+    try{
+      var v=JSON.parse(e.target.result);
+      if(!Array.isArray(v)) throw new Error('配列ではありません');
+      SUBACC=v; saveSubacc(); notif('✓ '+v.length+'件を読み込みました','green');
+    }catch(err){ notif('読み込めませんでした: '+err.message,'orange'); }
+  };
+  fr.readAsText(file);
+}
+
 function buildTKC(){
   var ym=getYM(),reiwa=ym.y-2018,ld=lastDay(ym.y,ym.m),date=reiwa*10000+ym.m*100+ld;
   var rows=[],fn=fixedRows.filter(function(r){return r.en&&r.amt>0;});
@@ -1285,17 +1460,20 @@ function buildTKC(){
   fn.forEach(function(r,i){
     push({src:'fixed',id:r.id,ji:r.ji,date:date,den:String(i+1)+'A',
           drCd:r.drCd,drN:r.drN,crCd:r.crCd,crN:r.crN,
+          drSub:r.drSub,crSub:r.crSub,
           amt:r.amt,tax:r.tax,memo:r.memo,menzei:r.menzei});
   });
   bankRows.filter(function(r){return r.inc&&r.st!=='skip'&&r.drCd!=='CHECK'&&r.crCd!=='CHECK';})
   .forEach(function(r,i){
     push({src:'bank',id:r.id,ji:r.ji,date:pD(r.date),den:String(fn.length+i+1)+'B',
           drCd:rCd(r.drCd),drN:kmN(r.drCd),crCd:rCd(r.crCd),crN:kmN(r.crCd),
+          drSub:r.drSub,crSub:r.crSub,
           amt:r.amt,tax:r.tax||0,memo:r.memo,vendor:r.name||'',menzei:r.menzei});
   });
   ccBuild().forEach(function(r){
     push({src:'cc',id:r.den,ji:r.ji,jiN:r.jiN,date:r.date,den:r.den,
           drCd:r.drCd,drN:r.drN,crCd:r.crCd,crN:r.crN,
+          drSub:r.drSub,crSub:r.crSub,
           amt:r.amt,tax:r.tax,memo:r.memo,vendor:r.vendor||'',jissai:r.jissai||'',menzei:r.menzei});
   });
   return rows;
@@ -1353,6 +1531,14 @@ function tkcGate(){
     if(future.length) add('ng','取引年月日が今日より先の行が'+future.length+'件あります。'
       +'TKCは将来日付の仕訳を受け付けないため、月末付けの定型仕訳はその日が来てから出力してください。',
       future[0]._src, mark(future));
+    var nosub=rows.filter(function(r){
+      return (isSubManaged(r['借方CD'])&&!r['借方補助']) || (isSubManaged(r['貸方CD'])&&!r['貸方補助']);
+    });
+    if(nosub.length) add('ng','補助コードが空の行が'+nosub.length+'件あります。'
+      +'口座別管理している科目は補助コードが無いとファイル全体が読み込めません。',
+      nosub[0]._src, mark(nosub));
+    if(!SUBACC.length) add('warn','補助コードが1件も登録されていません。'
+      +'TKCで口座別管理している科目がある場合は「口座・補助コード」で登録してください。','subacc',[]);
     var lost=buildSLP().lost;
     if(lost.length) add('warn','cp932にない文字が摘要・取引先名に含まれています（'+lost.join('')+'）。SLPでは「?」に置き換わります。');
     var k52=rows.filter(function(r){return SLP_KEIKA.indexOf(String(r['課']))>=0;});
