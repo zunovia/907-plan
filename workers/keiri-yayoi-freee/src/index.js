@@ -1,5 +1,5 @@
 // 配布版バナーに出す最終更新日。ツールを改修したらここを更新する
-const TOOL_UPDATED = '2026/09/08';
+const TOOL_UPDATED = '2026/09/09';
 
 export default {
   async fetch(request) {
@@ -1182,6 +1182,16 @@ function cpMap(){
   return _cpMap;
 }
 
+// cp932でのバイト数
+function cp932Len(str){ return toCp932(String(str==null?'':str)).length; }
+// cp932のバイト数で切り詰める（摘要80バイト・取引先名32バイト）
+function cutBytes(str, max){
+  var v = String(str==null?'':str);
+  if(cp932Len(v) <= max) return v;
+  while(v.length && cp932Len(v) > max) v = v.slice(0, -1);
+  return v;
+}
+
 // 文字列を cp932 のバイト列にする。表に無い文字は '?' に落とし、呼び手に知らせる
 var cp932Lost = [];
 function toCp932(str){
@@ -1275,20 +1285,21 @@ function buildSLP(){
     c[12]=0; c[13]=0;                 // M,N FILLER
     c[14]=Number(r['取引金額'])||0;   // O  取引金額（税込・カンマ無し）
     // P 内、消費税等 / Q 税額入力区分
-    //   経過措置は 0＋1 にするとTKCが控除割合込みで自動計算する
-    if(keika){ c[15]=0; c[16]=1; }
-    else if(t>0){ var x=cTax(c[14],t); c[15]=x.ta; c[16]=1; }
-    else { c[15]=0; c[16]=0; }
+    //   この法人は税込み経理（TKC消費税情報で確認）なので、内、消費税等は常に0。
+    //   経過措置だけは 0＋1 にするとTKCが控除割合込みで自動計算する。
+    c[15]=0;
+    c[16]=keika?1:0;
     c[17]=slpRate(t);                 // R  消費税率（800/1000/0）
     c[18]=0;                          // S  取引先コード（未登録は0）
-    c[19]=(r['取引先名（仕入先の氏名又は名称）']||'').slice(0,16); // T 取引先名
+    c[19]=cutBytes(r['取引先名（仕入先の氏名又は名称）']||'', 32); // T 取引先名（32バイト以内）
     // U,V,W 実際の仕入れ日
     var ji=slpDate(r['実際の仕入れ年月日（期間）']);
     c[20]= ji?1:0; c[21]= ji||0; c[22]=0;
-    c[23]=(r['元帳摘要（仕入れ資産等の総称）']||'').slice(0,40);   // X 元帳摘要
+    c[23]=cutBytes(r['元帳摘要（仕入れ資産等の総称）']||'', 80);   // X 元帳摘要（80バイト以内）
     c[24]=0;                          // Y  FILLER
     c[25]=0; c[26]=0;                 // Z,AA 収支区分/内訳区分（NPOは予備領域）
-    c[27]=Number(r['事業CD'])||0;     // AB 部門コード
+    // AB 部門コード。マスタは3桁（010/020/205）なので合わせる
+    c[27]=String(Number(r['事業CD'])||0).padStart(3,'0');
     c[28]=1;                          // AC 部門数
     c[29]=keika?1:0;                  // AD 部門金額入力区分（経過措置は1）
     c[30]=0;                          // AE FILLER
@@ -1299,9 +1310,9 @@ function buildSLP(){
     c[46]='';                         // AU 適格請求書発行事業者の登録番号
     slp.push(c);
     if(keika){
-      // 部門明細: レコード番号 / 999 / 同レコード番号 / 予備 / 部門 / 税込 / 税抜
-      var amt=c[14], ex=cTax(amt,t).ex;
-      cls.push([kancd,999,no,0,c[27],amt,ex]);
+      // 部門明細: 関与先 / 999 / 対応するレコード番号 / 予備 / 部門 / 税込金額 / 内訳金額
+      //   税込み経理なので内訳金額も取引金額と同額にする（控除計算はTKC側が行う）
+      cls.push([kancd,999,no,0,c[27],c[14],c[14]]);
     }
   });
   // 実際に符号化してみて、cp932で表せない文字を拾う
@@ -1314,6 +1325,69 @@ function buildSLP(){
 var TAB=String.fromCharCode(9), CRLF=String.fromCharCode(13,10);
 function slpText(rows){
   return rows.map(function(r){ return r.join(TAB); }).join(CRLF) + CRLF;
+}
+
+// 生成したSLP/CLSを機械検査する。1件でも出たら出力しない。
+// 課税区分ごとに必要な税率（0=税率なし）
+var SLP_RATE = {'0':0,'2':0,'3':0,'4':0,'8':0,'9':0,
+                '1':1000,'11':1000,'12':1000,'5':1000,'51':1000,'55':1000,
+                '52':1000,'53':1000,'6':1000,'61':1000,'62':1000,'63':1000,'65':1000,
+                '7':1000,'71':1000,'72':1000,'73':1000,'75':1000};
+function validateSLP(b){
+  var err=[], seen={};
+  b.slp.forEach(function(c,i){
+    var n=i+1, ka=String(c[6]);
+    if(c.length!==47) err.push(n+'行目: 列数が'+c.length+'（47でない）');
+    if(seen[c[2]]) err.push(n+'行目: レコード番号'+c[2]+'が重複');
+    seen[c[2]]=1;
+    var d8=String(c[3]);
+    if(d8.length!==8 || !(Number(d8)>0) || String(Number(d8)).length!==8)
+      err.push(n+'行目: 取引年月日が西暦8桁でない（'+c[3]+'）');
+    if(!(Number(c[14])>0)) err.push(n+'行目: 取引金額が'+c[14]);
+    if(String(c[15])!=='0') err.push(n+'行目: 税込み経理なのに内、消費税等が'+c[15]);
+    if(String(c[45])==='1'){
+      if(Number(c[17])!==800) err.push(n+'行目: 軽減対象なのに税率が'+c[17]);
+    } else if(SLP_RATE[ka]===undefined){
+      err.push(n+'行目: 想定外の課税区分'+ka);
+    } else if(Number(c[17])!==SLP_RATE[ka]){
+      err.push(n+'行目: 課税区分'+ka+'に対して税率'+c[17]);
+    }
+    if(!c[27]||String(c[27])==='000') err.push(n+'行目: 部門コードが'+(c[27]||'空'));
+    if(Number(c[28])!==1) err.push(n+'行目: 部門数が'+c[28]);
+    if(SLP_KEIKA.indexOf(ka)>=0){
+      if(Number(c[29])!==1) err.push(n+'行目: 経過措置なのに部門金額入力区分が'+c[29]);
+      if(!b.cls.some(function(x){return String(x[2])===String(c[2]);}))
+        err.push(n+'行目: 経過措置なのに対応する部門明細が無い');
+    }
+    if(String(c[18])!=='0'&&c[19]) err.push(n+'行目: 取引先コードと取引先名の二重指定');
+    if(cp932Len(c[23])>80) err.push(n+'行目: 元帳摘要が80バイト超');
+    if(cp932Len(c[19])>32) err.push(n+'行目: 取引先名が32バイト超');
+  });
+  b.cls.forEach(function(c,i){
+    if(c.length!==7) err.push('部門明細'+(i+1)+'行目: 列数が'+c.length+'（7でない）');
+    if(!b.slp.some(function(x){return String(x[2])===String(c[2]);}))
+      err.push('部門明細'+(i+1)+'行目: 対応する仕訳が無い');
+  });
+  return err;
+}
+
+// 書き出したバイト列そのものを検査する（改行の壊れ・列数）
+function validateBytes(bytes, cols){
+  var err=[], crlf=0, lf=0, cr=0;
+  for(var i=0;i<bytes.length;i++){
+    if(bytes[i]===13){ cr++; if(bytes[i+1]===10) crlf++; }
+    if(bytes[i]===10){ lf++; if(bytes[i-1]!==13) err.push('CRを伴わない改行がある'); }
+  }
+  if(cr!==crlf) err.push('CRとCRLFの数が合わない（改行が壊れている疑い）');
+  if(lf!==crlf) err.push('LFとCRLFの数が合わない');
+  if(!(bytes[bytes.length-2]===13&&bytes[bytes.length-1]===10)) err.push('末尾がCRLFでない');
+  // タブ区切りの列数
+  var line=0, tabs=0;
+  for(var j=0;j<bytes.length;j++){
+    if(bytes[j]===9) tabs++;
+    else if(bytes[j]===10){ line++; if(tabs!==cols-1) err.push(line+'行目: 区切りが'+(tabs+1)+'列'); tabs=0; }
+  }
+  return err;
 }
 
 function downloadSLP(){
@@ -1331,9 +1405,20 @@ function downloadSLP(){
   }
   var b=buildSLP();
   if(!b.slp.length){ notif('出力する仕訳がありません'); return; }
+
+  // 出力の直前に機械検査。1件でも出たら出さない
+  var ve=validateSLP(b);
   var ym=getYM(), base='SLP'+String(ym.y)+String(ym.m).padStart(2,'0');
   var files=[{name:base+'.slp', data:toCp932(slpText(b.slp))}];
   if(b.cls.length) files.push({name:base+'.cls', data:toCp932(slpText(b.cls))});
+  ve=ve.concat(validateBytes(files[0].data,47).map(function(m){return '仕訳ファイル: '+m;}));
+  if(files[1]) ve=ve.concat(validateBytes(files[1].data,7).map(function(m){return '部門明細: '+m;}));
+  if(ve.length){
+    alert('SLPの自己検査で '+ve.length+' 件の不備が見つかったため、出力を中止しました。\\n\\n'
+          + ve.slice(0,12).join('\\n') + (ve.length>12?('\\n…ほか'+(ve.length-12)+'件'):''));
+    notif('自己検査で不備が見つかったため出力を中止しました','orange');
+    return;
+  }
   dlFile(makeZip(files), base+'.zip');
   var m='✓ '+b.slp.length+'件を出力'+(b.cls.length?('（部門明細 '+b.cls.length+'件）'):'');
   if(b.lost.length) m+=' ※cp932にない文字を?に置換: '+b.lost.join('');
@@ -1543,6 +1628,8 @@ function tkcGate(){
     if(lost.length) add('warn','cp932にない文字が摘要・取引先名に含まれています（'+lost.join('')+'）。SLPでは「?」に置き換わります。');
     var k52=rows.filter(function(r){return SLP_KEIKA.indexOf(String(r['課']))>=0;});
     if(k52.length) add('info','経過措置（課税区分52等）が'+k52.length+'件あるため、部門明細(.cls)も同梱します。内、消費税等はTKC側で控除割合込みに自動計算されます。');
+    add('info','税込み経理として出力します（内、消費税等は全行0。TKC側が計算します）。'
+      +'貴法人の消費税情報が税抜き経理の場合はこのままでは使えません。');
   }
   if(SW==='tkc'&&TAXMODE==='inc') add('info','税込経理として出力します（内、消費税等・税抜き金額は空欄）。税抜経理の場合は上の設定を切り替えてください。');
 
