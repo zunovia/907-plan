@@ -332,7 +332,7 @@ input:focus,select:focus{border-color:#999}
       <div class="swcards">
         <div class="swcard act" id="swc-tkc"><div style="font-size:15px;font-weight:700;color:var(--cy);margin-bottom:3px">TKC</div><div style="font-size:10px;color:#888;margin-bottom:6px">29列CSV / SLP</div><span class="chip cg">✓ 対応済み</span></div>
         <div class="swcard" id="swc-yayoi"><div style="font-size:15px;font-weight:700;color:#e85a10;margin-bottom:3px">弥生</div><div style="font-size:10px;color:#888;margin-bottom:6px">弥生インポート形式</div><span class="chip" style="background:#eee;color:#888;font-size:9px">個別対応</span></div>
-        <div class="swcard" id="swc-freee"><div style="font-size:15px;font-weight:700;color:#00b894;margin-bottom:3px">freee</div><div style="font-size:10px;color:#888;margin-bottom:6px">取引インポート18列</div><span class="chip cg">✓ 対応済み</span></div>
+        <div class="swcard" id="swc-freee"><div style="font-size:15px;font-weight:700;color:#00b894;margin-bottom:3px">freee</div><div style="font-size:10px;color:#888;margin-bottom:6px">仕訳インポートCSV</div><span class="chip cg">✓ 対応済み</span></div>
         <div class="swcard" id="swc-mf"><div style="font-size:15px;font-weight:700;color:#0066cc;margin-bottom:3px">MF</div><div style="font-size:10px;color:#888;margin-bottom:6px">仕訳インポート形式</div><span class="chip" style="background:#eee;color:#888;font-size:9px">個別対応</span></div>
       </div>
     </div>
@@ -678,7 +678,7 @@ function switchSW(sw){
     if(b) b.className = 'swb' + (s===sw ? ' on' : '');
     if(c) c.className = 'swcard' + (s===sw ? ' act' : '');
   });
-  var fmt = {tkc:'TKC 29カラム形式',yayoi:'弥生インポート形式',freee:'freee 取引インポート形式',mf:'MF 仕訳インポート形式'};
+  var fmt = {tkc:'TKC 29カラム形式',yayoi:'弥生インポート形式',freee:'freee 仕訳インポート形式',mf:'MF 仕訳インポート形式'};
   var lbl = document.getElementById('out-lbl');
   if(lbl) lbl.textContent = '出力形式: ' + (fmt[sw] || sw);
   var nm  = {tkc:'TKC',yayoi:'弥生会計',freee:'freee',mf:'マネーフォワード'};
@@ -1275,7 +1275,7 @@ function renderOutput(){
   var fA=fn.reduce(function(s,r){return s+r.amt;},0);
   var bA=bn.reduce(function(s,r){return s+r.amt;},0);
   var cA=cn.reduce(function(s,r){return s+r.amt;},0);
-  var swN={tkc:'TKC 29列',yayoi:'弥生インポート形式',freee:'freee 取引インポート形式',mf:'MF 仕訳インポート形式'};
+  var swN={tkc:'TKC 29列',yayoi:'弥生インポート形式',freee:'freee 仕訳インポート形式',mf:'MF 仕訳インポート形式'};
   var lbl=document.getElementById('out-lbl'); if(lbl) lbl.textContent='出力形式: '+(swN[SW]||SW);
   document.getElementById('out-sums').innerHTML=\`
     <div style="background:var(--sf);border:.5px solid var(--bd);border-radius:var(--r);padding:10px;text-align:center"><div style="font-size:10px;color:#aaa;margin-bottom:3px">定型仕訳</div><div style="font-size:17px;font-weight:700">¥\${fA.toLocaleString()}</div><div style="font-size:10px;color:#aaa">\${fn.length}件</div></div>
@@ -1971,7 +1971,7 @@ footer{
   <div class="section reveal" style="padding-top:72px;padding-bottom:72px">
     <p class="s-label">Supported Software</p>
     <h2 class="s-title">TKCとfreee会計に対応。<br>弥生・マネーフォワードは個別対応です。</h2>
-    <p class="s-desc" style="max-width:700px">本ツールはTKCの仕訳インポート形式に加え、freee会計の取引インポート形式（18列CSV）にも対応しています。弥生会計・マネーフォワードクラウドは、貴法人の勘定科目とインポート形式に合わせた個別構築でのご提供となります。まずはご相談ください。</p>
+    <p class="s-desc" style="max-width:700px">本ツールはTKCの仕訳インポート形式に加え、freee会計の仕訳インポート形式（CSV）にも対応しています。弥生会計・マネーフォワードクラウドは、貴法人の勘定科目とインポート形式に合わせた個別構築でのご提供となります。まずはご相談ください。</p>
 
     <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:40px">
 
@@ -2016,8 +2016,8 @@ footer{
             <div style="font-size:11px;color:#999">シェア 24.0%（国内2位）</div>
           </div>
         </div>
-        <div style="font-size:12px;color:#555;line-height:1.8;margin-bottom:14px">個人事業主・中小企業に人気のクラウド会計。取引インポート形式（18列CSV）に対応済み。実機テスト完了。</div>
-        <div style="background:#0078c8;border-radius:6px;padding:8px 10px;font-size:11px;color:#fff;font-weight:600;text-align:center">✓ 18列CSV形式 対応済み</div>
+        <div style="font-size:12px;color:#555;line-height:1.8;margin-bottom:14px">個人事業主・中小企業に人気のクラウド会計。仕訳インポート形式（CSV）に対応。列名・日付形式・税区分はfreeeの仕様に合わせています。</div>
+        <div style="background:#0078c8;border-radius:6px;padding:8px 10px;font-size:11px;color:#fff;font-weight:600;text-align:center">✓ 仕訳インポートCSV 対応</div>
       </div>
 
       <!-- マネーフォワード: 開発対応 -->

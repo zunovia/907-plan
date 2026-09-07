@@ -1,5 +1,5 @@
 // 配布版バナーに出す最終更新日。ツールを改修したらここを更新する
-const TOOL_UPDATED = '2026/09/09';
+const TOOL_UPDATED = '2026/09/10';
 
 export default {
   async fetch(request) {
@@ -242,7 +242,7 @@ tr.hl td,.jr.hl{background:#fff4d6 !important;box-shadow:inset 3px 0 0 var(--am)
       <div class="swcards">
         <div class="swcard act" id="swc-tkc"><div style="font-size:15px;font-weight:700;color:var(--cy);margin-bottom:3px">TKC</div><div style="font-size:10px;color:#888;margin-bottom:6px">29カラム形式</div><span class="chip cg">✓ 対応済み</span></div>
         <div class="swcard" id="swc-yayoi"><div style="font-size:15px;font-weight:700;color:#e85a10;margin-bottom:3px">弥生</div><div style="font-size:10px;color:#888;margin-bottom:6px">弥生インポート形式</div><span class="chip" style="background:#eee;color:#888;font-size:9px">個別対応</span></div>
-        <div class="swcard" id="swc-freee"><div style="font-size:15px;font-weight:700;color:#00b894;margin-bottom:3px">freee</div><div style="font-size:10px;color:#888;margin-bottom:6px">取引インポート18列</div><span class="chip cg">✓ 対応済み</span></div>
+        <div class="swcard" id="swc-freee"><div style="font-size:15px;font-weight:700;color:#00b894;margin-bottom:3px">freee</div><div style="font-size:10px;color:#888;margin-bottom:6px">仕訳インポートCSV</div><span class="chip cg">✓ 対応済み</span></div>
         <div class="swcard" id="swc-mf"><div style="font-size:15px;font-weight:700;color:#0066cc;margin-bottom:3px">MF</div><div style="font-size:10px;color:#888;margin-bottom:6px">仕訳インポート形式</div><span class="chip" style="background:#eee;color:#888;font-size:9px">個別対応</span></div>
       </div>
     </div>
@@ -389,7 +389,29 @@ tr.hl td,.jr.hl{background:#fff4d6 !important;box-shadow:inset 3px 0 0 var(--am)
         <input id="set-keigen" value="" placeholder="空欄" onchange="setKeigen(this.value)" style="font-size:12px;padding:4px 6px;width:70px">
       </label>
     </div>
-    <div style="padding:0 12px 12px;font-size:11.5px;color:var(--ink3);line-height:1.8">
+    <div class="freee-only" style="padding:0 12px 12px">
+      <div style="font-size:11px;font-weight:700;color:var(--ink3);margin-bottom:6px">
+        freeeの税区分名（事業所に登録されている名称と一致させてください）
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <label style="font-size:11px;color:var(--ink3)">課税売上<br>
+          <input id="ft-sale10" onchange="setFreeeTax('sale10',this.value)" style="font-size:11px;padding:3px 5px;width:150px"></label>
+        <label style="font-size:11px;color:var(--ink3)">課税仕入<br>
+          <input id="ft-buy10" onchange="setFreeeTax('buy10',this.value)" style="font-size:11px;padding:3px 5px;width:150px"></label>
+        <label style="font-size:11px;color:var(--ink3)">免税事業者からの仕入<br>
+          <input id="ft-buy10keika" onchange="setFreeeTax('buy10keika',this.value)" style="font-size:11px;padding:3px 5px;width:170px"></label>
+        <label style="font-size:11px;color:var(--ink3)">軽減8%仕入<br>
+          <input id="ft-buy8" onchange="setFreeeTax('buy8',this.value)" style="font-size:11px;padding:3px 5px;width:150px"></label>
+        <label style="font-size:11px;color:var(--ink3)">対象外<br>
+          <input id="ft-none" onchange="setFreeeTax('none',this.value)" style="font-size:11px;padding:3px 5px;width:110px"></label>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:#aaa;line-height:1.75">
+        freeeの「仕訳インポート（CSV）」形式で出力します。1行目が <code>[表題行]</code>、
+        各明細行の先頭が <code>[明細行]</code>、日付は YYYY/MM/DD、伝票番号は自動で連番を振ります。
+        税額は税抜経理のときだけ入れます（freeeの仕様）。
+      </div>
+    </div>
+    <div class="tkc-only" style="padding:0 12px 12px;font-size:11.5px;color:var(--ink3);line-height:1.8">
 <span class="slp-only">
       <strong>SLP（zip）がTKCへの取込ファイルです。</strong>
       「日常業務 ＞ 仕訳データの読込 ＞ 他社システム自動仕訳の読込」で読み込みます。
@@ -575,6 +597,7 @@ var CAT_B = {給与:'var(--gnbg)',減価償却:'var(--blbg)',地代家賃:'var(-
 (function init(){
   fixedRows = DEFAULT_MASTER.map(function(d){ return Object.assign({},d); });
   loadSubacc();
+  loadFreeeTax();
   renderFixed();
   updateTop();
   renderSubacc();
@@ -614,7 +637,7 @@ function switchSW(sw){
     if(b) b.className = 'swb' + (s===sw ? ' on' : '');
     if(c) c.className = 'swcard' + (s===sw ? ' act' : '');
   });
-  var fmt = {tkc:'TKC 29カラム形式',yayoi:'弥生インポート形式',freee:'freee 取引インポート形式',mf:'MF 仕訳インポート形式'};
+  var fmt = {tkc:'TKC 29カラム形式',yayoi:'弥生インポート形式',freee:'freee 仕訳インポート形式',mf:'MF 仕訳インポート形式'};
   var lbl = document.getElementById('out-lbl');
   if(lbl) lbl.textContent = '出力形式: ' + (fmt[sw] || sw);
   var nm  = {tkc:'TKC',yayoi:'弥生会計',freee:'freee',mf:'マネーフォワード'};
@@ -1092,7 +1115,19 @@ function ccBuild(){
 // =============================================
 var TKC_C=["事業CD","事業名","年月日","伝番","証番","課","事","小切手NO","借方CD","借方補助","借方科目名","借方口座名","貸方CD","貸方補助","貸方科目名","貸方口座名","取引金額","税率","内、消費税等","税抜き金額","取引先CD","取引先名（仕入先の氏名又は名称）","実際の仕入れ年月日（期間）","元帳摘要（仕入れ資産等の総称）","ﾌﾟﾛｼﾞｪｸﾄCD","ﾌﾟﾛｼﾞｪｸﾄ名","軽減対象取引区分","控除割合","事業者登録番号"];
 var YY_C=["伝票No","年月日","借方勘定科目","借方補助科目","借方税区分","借方金額","借方消費税額","貸方勘定科目","貸方補助科目","貸方税区分","貸方金額","貸方消費税額","摘要","番号","期日","タイプ","生成元"];
-var FR_C=["発生日","借方勘定科目","借方補助科目名","借方部門","借方税区分","借方金額","借方税額","貸方勘定科目","貸方補助科目名","貸方部門","貸方税区分","貸方金額","貸方税額","摘要","管理番号"];
+// freee 仕訳インポート（CSV）の列。先頭列は [表題行] / [明細行] の目印
+var FR_C=["[表題行]","日付","伝票番号",
+          "借方勘定科目","借方補助科目","借方部門","借方税区分","借方金額","借方税額",
+          "貸方勘定科目","貸方補助科目","貸方部門","貸方税区分","貸方金額","貸方税額","摘要"];
+
+// freeeの税区分名は事業所ごとに違うので、設定として持つ。
+// 既定値はfreee会計の仕訳帳で実際に使われていた名称。
+var FR_TAX = {sale10:'課税売上10%', buy10:'課対仕入10%',
+              buy10keika:'課対仕入（控80）10%', buy8:'課対仕入（軽）8%', none:'対象外'};
+function loadFreeeTax(){
+  try{ var v=JSON.parse(lsGet('freee_tax')||'null'); if(v) Object.assign(FR_TAX,v); }catch(e){}
+}
+function setFreeeTax(k,v){ FR_TAX[k]=String(v||'').trim(); lsSet('freee_tax',JSON.stringify(FR_TAX)); renderOutput(); }
 var MF_C=["取引日","借方勘定科目","借方補助科目","借方税区分","借方金額","貸方勘定科目","貸方補助科目","貸方税区分","貸方金額","摘要","仕訳メモ","タグ","MF仕訳ID"];
 
 // =============================================
@@ -1587,6 +1622,20 @@ function tkcGate(){
                       nj[0]._src, mark(nj));
   }
 
+  if(SW==='freee'){
+    var fr=buildFreee();
+    // freeeは名称で受け取る。コードのままだと未登録の科目として新規作成されてしまう
+    var isCode=function(v){ return /^[0-9]{4}$/.test(String(v||'')); };
+    var nameNg=fr.filter(function(r){ return isCode(r['借方勘定科目'])||isCode(r['貸方勘定科目']); });
+    if(nameNg.length) add('ng','勘定科目が名称ではなくコードのままの行が'+nameNg.length+'件あります。'
+      +'freeeは名称で受け取るため、このままだと未登録の科目として新規作成されてしまいます。');
+    var depNg=fr.filter(function(r){ return !r['借方部門']&&!r['貸方部門']; });
+    if(depNg.length) add('warn','部門が空の行が'+depNg.length+'件あります。'
+      +'freeeの部門タグ名と一致しない事業CDは空欄になります。');
+    add('info','freeeの税区分名は事業所ごとに違います。上の設定が'
+      +'freeeに登録されている名称と一致しているかご確認ください。');
+  }
+
   var z=rows.filter(function(r){return !(Number(r['取引金額'])>0);});
   if(z.length) add('ng','取引金額が0または未入力の行が'+z.length+'件あります。', z[0]._src, mark(z));
 
@@ -1657,24 +1706,50 @@ function buildYayoi(){
 }
 function buildFreee(){
   var ym=getYM(),ld=lastDay(ym.y,ym.m);
-  var date=ym.y+'-'+(String(ym.m).padStart(2,'0'))+'-'+String(ld).padStart(2,'0');
-  var rows=[],no=1;
-  function fT(t){return t===0.1?'課税売上10%（軽）':'対象外';}
-  function fTA(a,t){return t?Math.round(a-Math.round(a/(1+t))):0;}
+  var date=ym.y+'/'+String(ym.m).padStart(2,'0')+'/'+String(ld).padStart(2,'0');
+  var rows=[],no=0;
+
+  // 借方（費用/資産の増）側の税区分。収益が貸方なら売上の税区分にする
+  function taxOf(cd, t, menzei, isCredit){
+    if(!(t>0)) return FR_TAX.none;
+    if(isRev(cd)) return FR_TAX.sale10;
+    if(!isCost(cd)) return FR_TAX.none;
+    if(Math.abs(t-0.08)<1e-9) return FR_TAX.buy8;
+    return menzei ? FR_TAX.buy10keika : FR_TAX.buy10;
+  }
+  // 税額は税抜経理のときだけ入れる（freeeヘルプ ※3）
+  function amtTax(a,t){ return (TAXMODE==='exc'&&t>0) ? cTax(a,t).ta : ''; }
+
+  function push(o){
+    no++;
+    var t=Number(o.tax)||0, ji=JI_MAP[o.ji]||'';
+    rows.push({
+      "[表題行]":"[明細行]",
+      "日付":o.date, "伝票番号":no,
+      "借方勘定科目":o.drN||kmN(o.drCd), "借方補助科目":o.drSub||'', "借方部門":ji,
+      "借方税区分":taxOf(o.drCd,t,o.menzei,false), "借方金額":o.amt, "借方税額":amtTax(o.amt,t),
+      "貸方勘定科目":o.crN||kmN(o.crCd), "貸方補助科目":o.crSub||'', "貸方部門":ji,
+      "貸方税区分":taxOf(o.crCd,t,o.menzei,true), "貸方金額":o.amt, "貸方税額":amtTax(o.amt,t),
+      "摘要":o.memo
+    });
+  }
+
   fixedRows.filter(function(r){return r.en&&r.amt>0;}).forEach(function(r){
-    var ji=JI_MAP[r.ji]||'';
-    rows.push({"発生日":date,"借方勘定科目":r.drN||kmN(r.drCd),"借方補助科目名":'',"借方部門":ji,"借方税区分":fT(r.tax),"借方金額":r.amt,"借方税額":fTA(r.amt,r.tax),"貸方勘定科目":r.crN||kmN(r.crCd),"貸方補助科目名":'',"貸方部門":ji,"貸方税区分":'対象外',"貸方金額":r.amt,"貸方税額":0,"摘要":r.memo,"管理番号":'F'+String(no++).padStart(4,'0')});
+    push({date:date,drCd:r.drCd,drN:r.drN,crCd:r.crCd,crN:r.crN,drSub:r.drSub,crSub:r.crSub,
+          amt:r.amt,tax:r.tax,memo:r.memo,ji:r.ji,menzei:r.menzei});
   });
-  bankRows.filter(function(r){return r.inc&&r.st!=='skip'&&r.drCd!=='CHECK'&&r.crCd!=='CHECK';}).forEach(function(r){
-    var d=fmtD(r.date).replace(/\\//g,'-'),t=r.tax||0,ji=JI_MAP[r.ji]||'';
-    rows.push({"発生日":d,"借方勘定科目":kmN(r.drCd),"借方補助科目名":'',"借方部門":ji,"借方税区分":fT(t),"借方金額":r.amt,"借方税額":fTA(r.amt,t),"貸方勘定科目":kmN(r.crCd),"貸方補助科目名":'',"貸方部門":ji,"貸方税区分":'対象外',"貸方金額":r.amt,"貸方税額":0,"摘要":r.memo,"管理番号":'F'+String(no++).padStart(4,'0')});
+  bankRows.filter(function(r){return r.inc&&r.st!=='skip'&&r.drCd!=='CHECK'&&r.crCd!=='CHECK';})
+  .forEach(function(r){
+    push({date:fmtD(r.date),drCd:rCd(r.drCd),drN:kmN(r.drCd),crCd:rCd(r.crCd),crN:kmN(r.crCd),
+          drSub:r.drSub,crSub:r.crSub,amt:r.amt,tax:r.tax||0,memo:r.memo,ji:r.ji,menzei:r.menzei});
   });
   ccBuild().forEach(function(r){
-    var d=toISO(r.date)||date,ji=JI_MAP[r.ji]||'';
-    rows.push({"発生日":d,"借方勘定科目":r.drN||kmN(r.drCd),"借方補助科目名":'',"借方部門":ji,"借方税区分":fT(r.tax),"借方金額":r.amt,"借方税額":r.ta||0,"貸方勘定科目":r.crN||kmN(r.crCd),"貸方補助科目名":'',"貸方部門":ji,"貸方税区分":'対象外',"貸方金額":r.amt,"貸方税額":0,"摘要":r.memo,"管理番号":'F'+String(no++).padStart(4,'0')});
+    push({date:r2AD(r.date)||date,drCd:r.drCd,drN:r.drN,crCd:r.crCd,crN:r.crN,
+          drSub:r.drSub,crSub:r.crSub,amt:r.amt,tax:r.tax,memo:r.memo,ji:r.ji,menzei:r.menzei});
   });
   return rows;
 }
+
 function buildMF(){
   var ym=getYM(),ld=lastDay(ym.y,ym.m);
   var date=ym.y+'/'+(String(ym.m).padStart(2,'0'))+'/'+String(ld).padStart(2,'0');
@@ -1778,7 +1853,7 @@ function renderOutput(){
   var bA=bn.reduce(function(s,r){return s+r.amt;},0);
   var cA=cn.reduce(function(s,r){return s+r.amt;},0);
   var swN={tkc:(SLP_ENABLED?'TKC SLP（47列・zip）＋確認用CSV':'TKC 29列（確認用）'),
-           yayoi:'弥生インポート形式',freee:'freee 取引インポート形式',mf:'MF 仕訳インポート形式'};
+           yayoi:'弥生インポート形式',freee:'freee 仕訳インポート形式',mf:'MF 仕訳インポート形式'};
   var lbl=document.getElementById('out-lbl'); if(lbl) lbl.textContent='出力形式: '+(swN[SW]||SW);
   document.getElementById('out-sums').innerHTML=\`
     <div style="background:var(--sf);border:.5px solid var(--bd);border-radius:var(--r);padding:10px;text-align:center"><div style="font-size:10px;color:#aaa;margin-bottom:3px">定型仕訳</div><div style="font-size:17px;font-weight:700">¥\${fA.toLocaleString()}</div><div style="font-size:10px;color:#aaa">\${fn.length}件</div></div>
@@ -1840,7 +1915,13 @@ function clr(node){ while(node.firstChild) node.removeChild(node.firstChild); }
 function renderGate(){
   var body=document.getElementById('gate-body'), chip=document.getElementById('gate-chip');
   if(!body) return;
-  var ts=document.getElementById('tax-set'); if(ts) ts.style.display=(SW==='tkc'?'':'none');
+  var ts=document.getElementById('tax-set');
+  if(ts) ts.style.display=(SW==='tkc'||SW==='freee')?'':'none';
+  document.querySelectorAll('.freee-only').forEach(function(e){ e.style.display=(SW==='freee')?'':'none'; });
+  document.querySelectorAll('.tkc-only').forEach(function(e){ e.style.display=(SW==='tkc')?'':'none'; });
+  ['sale10','buy10','buy10keika','buy8','none'].forEach(function(k){
+    var el=document.getElementById('ft-'+k); if(el&&el.value!==FR_TAX[k]) el.value=FR_TAX[k];
+  });
   document.querySelectorAll('.slp-only').forEach(function(e){
     e.style.display = (SLP_ENABLED&&SW==='tkc') ? '' : 'none';
   });
@@ -2519,7 +2600,7 @@ footer{
   <div class="section reveal" style="padding-top:72px;padding-bottom:72px">
     <p class="s-label">Supported Software</p>
     <h2 class="s-title">TKCとfreee会計に対応。<br>弥生・マネーフォワードは個別対応です。</h2>
-    <p class="s-desc" style="max-width:700px">本ツールはTKCの仕訳インポート形式に加え、freee会計の取引インポート形式（18列CSV）にも対応しています。弥生会計・マネーフォワードクラウドは、貴法人の勘定科目とインポート形式に合わせた個別構築でのご提供となります。まずはご相談ください。</p>
+    <p class="s-desc" style="max-width:700px">本ツールはTKCの仕訳インポート形式に加え、freee会計の仕訳インポート形式（CSV）にも対応しています。弥生会計・マネーフォワードクラウドは、貴法人の勘定科目とインポート形式に合わせた個別構築でのご提供となります。まずはご相談ください。</p>
 
     <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:40px">
 
@@ -2564,8 +2645,8 @@ footer{
             <div style="font-size:11px;color:#999">シェア 24.0%（国内2位）</div>
           </div>
         </div>
-        <div style="font-size:12px;color:#555;line-height:1.8;margin-bottom:14px">個人事業主・中小企業に人気のクラウド会計。取引インポート形式（18列CSV）に対応済み。実機テスト完了。</div>
-        <div style="background:#0078c8;border-radius:6px;padding:8px 10px;font-size:11px;color:#fff;font-weight:600;text-align:center">✓ 18列CSV形式 対応済み</div>
+        <div style="font-size:12px;color:#555;line-height:1.8;margin-bottom:14px">個人事業主・中小企業に人気のクラウド会計。仕訳インポート形式（CSV）に対応。列名・日付形式・税区分はfreeeの仕様に合わせています。</div>
+        <div style="background:#0078c8;border-radius:6px;padding:8px 10px;font-size:11px;color:#fff;font-weight:600;text-align:center">✓ 仕訳インポートCSV 対応</div>
       </div>
 
       <!-- マネーフォワード: 開発対応 -->
